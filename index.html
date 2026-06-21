@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#F7F7F5">
+<title>H.E.A.T. Camera Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* ============================================================
+   H.E.A.T. Camera Manager — Design System
+   Phase 1: Grundgerüst
+   ============================================================ */
+
+:root{
+  /* Farben */
+  --bg:        #F7F7F5;
+  --surface:   #FFFFFF;
+  --accent:    #E8530A;
+  --accent-d:  #C8440A;
+  --text:      #111111;
+  --text-2:    #6B6B6B;
+  --text-3:    #9B9B9B;
+  --border:    #E5E5E5;
+  --border-2:  #EFEFED;
+
+  /* Füllstand-Ampel */
+  --ok:    #34A853;
+  --warn:  #E8530A;
+  --crit:  #D7263D;
+
+  /* Typo */
+  --font-ui:   -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", "Roboto Mono", ui-monospace, "Menlo", monospace;
+
+  /* Maße */
+  --radius:    14px;
+  --radius-sm: 10px;
+  --nav-h:     64px;
+  --maxw:      760px;
+  --shadow:    0 1px 2px rgba(17,17,17,.04), 0 4px 16px rgba(17,17,17,.05);
+  --shadow-lg: 0 8px 40px rgba(17,17,17,.16);
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ margin:0; padding:0; height:100%; }
+body{
+  font-family:var(--font-ui);
+  background:var(--bg);
+  color:var(--text);
+  font-size:16px;
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overscroll-behavior-y:none;
+}
+button{ font-family:inherit; cursor:pointer; }
+input,select,textarea{ font-family:inherit; font-size:16px; }
+.mono{ font-family:var(--font-mono); font-feature-settings:"tnum" 1; letter-spacing:-.01em; }
+
+/* ---------- Auth Screen ---------- */
+#auth-screen{
+  position:fixed; inset:0; z-index:100;
+  background:var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:24px;
+  padding-bottom:calc(24px + env(safe-area-inset-bottom));
+}
+.auth-card{
+  width:100%; max-width:340px;
+  text-align:center;
+}
+.auth-logo{
+  font-size:28px; font-weight:700; letter-spacing:.06em;
+  margin:0 0 4px;
+}
+.auth-logo .dot{ color:var(--accent); }
+.auth-sub{
+  color:var(--text-2); font-size:13px; margin:0 0 32px; letter-spacing:.02em;
+}
+.auth-field{ position:relative; margin-bottom:12px; }
+.auth-field input{
+  width:100%; padding:15px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--surface);
+  text-align:center; letter-spacing:.08em;
+  transition:border-color .15s, box-shadow .15s;
+}
+.auth-field input:focus{
+  outline:none; border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(232,83,10,.12);
+}
+.auth-field input.shake{ animation:shake .4s; border-color:var(--crit); }
+@keyframes shake{
+  0%,100%{ transform:translateX(0); }
+  20%,60%{ transform:translateX(-7px); }
+  40%,80%{ transform:translateX(7px); }
+}
+.auth-err{
+  color:var(--crit); font-size:13px; height:18px; margin:2px 0 10px;
+  opacity:0; transition:opacity .15s;
+}
+.auth-err.show{ opacity:1; }
+
+/* ---------- Buttons ---------- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  padding:13px 18px; border-radius:var(--radius-sm);
+  border:1px solid transparent; font-size:15px; font-weight:600;
+  background:var(--surface); color:var(--text);
+  transition:transform .08s, background .15s, border-color .15s, opacity .15s;
+  user-select:none;
+}
+.btn:active{ transform:scale(.975); }
+.btn-primary{ background:var(--accent); color:#fff; width:100%; }
+.btn-primary:active{ background:var(--accent-d); }
+.btn-block{ width:100%; }
+.btn-ghost{ background:transparent; border-color:var(--border); color:var(--text); }
+.btn-ghost:active{ background:var(--border-2); }
+.btn-danger{ background:transparent; color:var(--crit); border-color:transparent; }
+.btn-sm{ padding:8px 13px; font-size:13px; border-radius:9px; }
+.btn[disabled]{ opacity:.4; pointer-events:none; }
+
+/* ---------- App Shell ---------- */
+#app{ display:none; min-height:100%; }
+#app.active{ display:block; }
+
+.app-header{
+  position:sticky; top:0; z-index:20;
+  background:rgba(247,247,245,.82);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid var(--border-2);
+  padding:calc(env(safe-area-inset-top) + 12px) 20px 12px;
+}
+.app-header-inner{
+  max-width:var(--maxw); margin:0 auto;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.app-title{ font-size:13px; font-weight:600; letter-spacing:.08em; color:var(--text-2); margin:0; }
+.app-title b{ color:var(--text); letter-spacing:.1em; }
+.app-title .dot{ color:var(--accent); }
+.view-title{ font-size:22px; font-weight:700; margin:2px 0 0; letter-spacing:-.01em; }
+
+/* Sync-Status-Punkt im Header */
+.sync-dot{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:11px; font-weight:600; color:var(--text-3); letter-spacing:.02em;
+}
+.sync-dot::before{
+  content:""; width:8px; height:8px; border-radius:5px; background:var(--text-3);
+  transition:background .3s;
+}
+.sync-dot.cloud::before{ background:var(--ok); }
+.sync-dot.local::before{ background:#E0A106; }
+
+main#view-container{
+  max-width:var(--maxw); margin:0 auto;
+  padding:18px 16px calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px);
+}
+
+/* ---------- Bottom Nav ---------- */
+.bottom-nav{
+  position:fixed; left:0; right:0; bottom:0; z-index:30;
+  background:rgba(255,255,255,.86);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-top:1px solid var(--border-2);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.bottom-nav-inner{
+  max-width:var(--maxw); margin:0 auto;
+  height:var(--nav-h);
+  display:grid; grid-template-columns:repeat(4,1fr);
+}
+.nav-item{
+  background:none; border:none;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  color:var(--text-3); font-size:10.5px; font-weight:600; letter-spacing:.02em;
+  transition:color .15s;
+}
+.nav-item svg{ width:23px; height:23px; stroke-width:1.8; }
+.nav-item.active{ color:var(--accent); }
+.nav-item .nav-badge{
+  position:absolute; transform:translate(13px,-13px);
+  min-width:8px; height:8px; border-radius:5px; background:var(--accent);
+}
+
+/* ---------- Cards ---------- */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  margin-bottom:12px;
+}
+.card-pad{ padding:16px; }
+
+.section-label{
+  font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--text-3); margin:22px 4px 10px;
+}
+.section-label:first-child{ margin-top:4px; }
+
+/* ---------- Camera Card ---------- */
+.cam-card{
+  display:flex; align-items:stretch; gap:0;
+  overflow:hidden;
+}
+.cam-rail{ width:5px; flex:none; background:var(--accent); }
+.cam-body{ flex:1; padding:14px 14px 14px 13px; min-width:0; }
+.cam-head{ display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+.cam-id{
+  font-family:var(--font-mono); font-weight:600; font-size:13px;
+  background:var(--text); color:#fff; padding:3px 8px; border-radius:7px;
+  flex:none; letter-spacing:.02em;
+}
+.cam-name{ font-weight:600; font-size:15px; flex:1; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cam-edit{
+  flex:none; background:none; border:none; color:var(--text-3); padding:4px;
+  display:flex; align-items:center;
+}
+.cam-edit svg{ width:19px; height:19px; }
+.cam-specs{
+  display:grid; grid-template-columns:1fr 1fr; gap:8px 14px;
+}
+.spec{ min-width:0; }
+.spec-k{ font-size:10.5px; color:var(--text-3); letter-spacing:.04em; text-transform:uppercase; }
+.spec-v{
+  font-family:var(--font-mono); font-size:13.5px; font-weight:500;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.spec-v .u{ color:var(--text-3); font-weight:400; }
+
+.empty-state{
+  text-align:center; color:var(--text-2); padding:48px 20px;
+}
+.empty-state svg{ width:40px; height:40px; color:var(--text-3); margin-bottom:12px; }
+
+/* ---------- Placeholder views ---------- */
+.placeholder{
+  text-align:center; padding:64px 24px; color:var(--text-2);
+}
+.placeholder .ph-num{
+  font-family:var(--font-mono); font-size:13px; color:var(--accent);
+  font-weight:600; letter-spacing:.1em; margin-bottom:8px;
+}
+.placeholder h3{ margin:0 0 6px; font-size:18px; color:var(--text); }
+.placeholder p{ margin:0; font-size:14px; }
+
+/* ---------- Bottom Sheet (Modal) ---------- */
+.sheet-backdrop{
+  position:fixed; inset:0; z-index:50;
+  background:rgba(17,17,17,.35);
+  opacity:0; pointer-events:none; transition:opacity .25s;
+}
+.sheet-backdrop.open{ opacity:1; pointer-events:auto; }
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:51;
+  max-width:var(--maxw); margin:0 auto;
+  background:var(--surface);
+  border-radius:20px 20px 0 0;
+  box-shadow:var(--shadow-lg);
+  transform:translateY(100%); transition:transform .3s cubic-bezier(.32,.72,0,1);
+  max-height:92vh; display:flex; flex-direction:column;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.sheet.open{ transform:translateY(0); }
+.sheet-grip{ width:38px; height:5px; border-radius:3px; background:var(--border);
+  margin:9px auto 4px; flex:none; }
+.sheet-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 18px 14px; border-bottom:1px solid var(--border-2); flex:none;
+}
+.sheet-header h3{ margin:0; font-size:17px; font-weight:700; }
+.sheet-close{ background:none; border:none; color:var(--accent); font-size:15px; font-weight:600; padding:6px; }
+.sheet-body{ overflow-y:auto; padding:16px 18px 20px; -webkit-overflow-scrolling:touch; }
+
+/* ---------- Form ---------- */
+.field{ margin-bottom:15px; }
+.field-row{ display:flex; gap:12px; }
+.field-row .field{ flex:1; }
+.field label{
+  display:block; font-size:12px; font-weight:600; color:var(--text-2);
+  letter-spacing:.02em; margin-bottom:6px;
+}
+.field input, .field select{
+  width:100%; padding:12px 13px;
+  border:1px solid var(--border); border-radius:var(--radius-sm);
+  background:var(--surface); color:var(--text);
+  transition:border-color .15s, box-shadow .15s;
+  appearance:none; -webkit-appearance:none;
+}
+.field input.mono{ font-family:var(--font-mono); }
+.field select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239B9B9B' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 13px center; padding-right:34px;
+}
+.field input:focus, .field select:focus{
+  outline:none; border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(232,83,10,.1);
+}
+.field .hint{ font-size:11.5px; color:var(--text-3); margin-top:5px; }
+.field .suffix-wrap{ position:relative; }
+.field .suffix{
+  position:absolute; right:13px; top:50%; transform:translateY(-50%);
+  font-family:var(--font-mono); font-size:13px; color:var(--text-3); pointer-events:none;
+}
+.field .suffix-wrap input{ padding-right:52px; }
+
+.sheet-actions{ margin-top:8px; display:flex; flex-direction:column; gap:9px; }
+
+/* ---------- Toast ---------- */
+#toast{
+  position:fixed; left:50%; bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);
+  transform:translate(-50%,20px); z-index:60;
+  background:var(--text); color:#fff; font-size:13.5px; font-weight:500;
+  padding:11px 18px; border-radius:11px; box-shadow:var(--shadow-lg);
+  opacity:0; pointer-events:none; transition:opacity .2s, transform .2s;
+  max-width:88%; text-align:center;
+}
+#toast.show{ opacity:1; transform:translate(-50%,0); }
+
+/* ============================================================
+   Phase 2 — Planungsmodus
+   ============================================================ */
+.seg-tabs{
+  display:flex; gap:8px; overflow-x:auto; padding:2px 2px 12px;
+  -webkit-overflow-scrolling:touch; scrollbar-width:none;
+}
+.seg-tabs::-webkit-scrollbar{ display:none; }
+.seg-tab{
+  flex:0 0 auto; min-width:74px;
+  display:flex; flex-direction:column; align-items:flex-start; gap:3px;
+  padding:9px 13px; border:1px solid var(--border); border-radius:12px;
+  background:var(--surface); color:var(--text); transition:background .15s, border-color .15s, color .15s;
+}
+.seg-tab .seg-d{ font-size:14px; font-weight:700; }
+.seg-tab .seg-gb{ font-size:11px; color:var(--text-3); font-weight:500; }
+.seg-tab.active{ background:var(--text); border-color:var(--text); color:#fff; }
+.seg-tab.active .seg-gb{ color:rgba(255,255,255,.72); }
+.seg-tab.seg-sum{ min-width:62px; }
+.seg-tab.seg-sum.active{ background:var(--accent); border-color:var(--accent); }
+
+.plan-cam-list{ display:flex; flex-direction:column; }
+.plan-cam{
+  display:flex; flex-direction:column; gap:8px; padding:10px 0;
+  border-bottom:1px solid var(--border-2);
+}
+.plan-cam:last-child{ border-bottom:none; }
+.pc-main{ display:flex; align-items:center; gap:10px; }
+.pc-note{
+  width:100%; padding:8px 11px; font-size:13px;
+  border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--text);
+  font-family:inherit;
+}
+.pc-note::placeholder{ color:var(--text-3); }
+.pc-note:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,83,10,.1); background:var(--surface); }
+.plan-cam .pc-id{
+  font-family:var(--font-mono); font-size:11px; font-weight:600;
+  background:var(--border-2); color:var(--text-2); padding:2px 6px; border-radius:6px; flex:none;
+}
+.plan-cam.on .pc-id{ background:var(--text); color:#fff; }
+.plan-cam .pc-name{
+  flex:1; min-width:0; font-size:14px; font-weight:500; color:var(--text-3);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.plan-cam.on .pc-name{ color:var(--text); }
+.pc-hours{ display:flex; align-items:center; gap:4px; flex:none; }
+.pc-hours input{
+  width:52px; padding:7px 8px; text-align:right;
+  border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text);
+}
+.pc-hours input:disabled{ background:var(--border-2); color:var(--text-3); }
+.pc-hours input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,83,10,.1); }
+.pc-hours .u{ font-size:12px; color:var(--text-3); }
+.pc-gb{ flex:none; width:64px; text-align:right; font-size:13px; font-weight:600; }
+.plan-cam:not(.on) .pc-gb{ color:var(--text-3); }
+
+/* Toggle Switch */
+.switch{ position:relative; width:42px; height:25px; flex:none; display:inline-block; }
+.switch input{ position:absolute; opacity:0; width:0; height:0; }
+.switch .track{ position:absolute; inset:0; background:var(--border); border-radius:20px; transition:background .2s; }
+.switch .thumb{
+  position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .2s;
+}
+.switch input:checked ~ .track{ background:var(--ok); }
+.switch input:checked ~ .thumb{ transform:translateX(17px); }
+
+.mini-label{ display:block; font-size:12px; font-weight:600; color:var(--text-2); margin-bottom:7px; }
+.note-area{
+  width:100%; border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:10px 12px; resize:vertical; background:var(--surface); color:var(--text);
+  font-family:inherit; line-height:1.4;
+}
+.note-area:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,83,10,.1); }
+
+/* Dashboard */
+.dash-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:12px; }
+.stat{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:13px 14px;
+}
+.stat-k{ font-size:11px; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:.04em; }
+.stat-v{ font-size:22px; font-weight:700; margin:5px 0 3px; letter-spacing:-.01em; }
+.stat-sub{ font-size:11.5px; color:var(--text-3); }
+.rb{ display:inline-block; font-size:16px; font-weight:700; }
+.rb-ok{ color:var(--ok); }
+.rb-warn{ color:var(--crit); }
+
+/* Woche-Übersicht */
+.wk-total{ display:flex; gap:18px; padding:4px 16px 14px; flex-wrap:wrap; }
+.wk-total > div{ display:flex; flex-direction:column; }
+.wk-total-v{ font-size:20px; font-weight:700; }
+.wk-total-k{ font-size:11px; color:var(--text-3); }
+.wk-table{ width:100%; border-collapse:collapse; font-size:13px; }
+.wk-table th{
+  text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;
+  color:var(--text-3); font-weight:600; padding:8px 10px; border-top:1px solid var(--border-2);
+}
+.wk-table td{ padding:9px 10px; border-top:1px solid var(--border-2); }
+.wk-table .wk-day{ font-weight:600; }
+.cmp-table th, .cmp-table td{ white-space:nowrap; }
+.cmp-table .cmp-total td{ font-weight:700; border-top:2px solid var(--border); }
+
+/* Annahmen */
+.assume-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+.assume-grid .suffix-wrap input{ text-align:right; }
+.assume-hint{ font-size:11.5px; color:var(--text-3); margin:12px 0 0; line-height:1.4; }
+
+/* Szenarien */
+.scn-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.scn-card{
+  display:flex; align-items:center; gap:10px; padding:11px 12px;
+  border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg);
+}
+.scn-info{ flex:1; min-width:0; }
+.scn-name{ font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.scn-meta{ font-size:11.5px; color:var(--text-3); margin-top:2px; }
+.scn-actions{ display:flex; gap:6px; flex:none; }
+.scn-buttons{ display:flex; gap:9px; }
+.scn-buttons .btn{ flex:1; }
+.cmp-head{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.cmp-title{ font-size:16px; font-weight:700; }
+
+/* ============================================================
+   Phase 3 — Drehmodus
+   ============================================================ */
+.btn-danger-solid{ background:var(--crit); color:#fff; }
+.btn-danger-solid:active{ background:#B71F33; }
+
+.dreh-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:8px; }
+.dreh-card{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:12px 13px; cursor:pointer;
+  transition:transform .08s, border-color .15s;
+}
+.dreh-card:active{ transform:scale(.985); }
+.dreh-card.status-running{ border-color:rgba(215,38,61,.40); }
+.dreh-card.status-paused{ border-color:rgba(224,161,6,.55); }
+.dc-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.status-badge{ font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:7px; letter-spacing:.03em; }
+.sb-idle{ background:var(--border-2); color:var(--text-2); }
+.sb-rec{ background:var(--crit); color:#fff; animation:recpulse 1.6s ease-in-out infinite; }
+.sb-pause{ background:#FCEFC7; color:#9A6B00; }
+.sb-stopped{ background:var(--text); color:#fff; }
+@keyframes recpulse{ 0%,100%{ opacity:1; } 50%{ opacity:.5; } }
+.dc-name{ font-size:13px; font-weight:600; color:var(--text); margin-bottom:8px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dc-clock{ font-size:23px; font-weight:700; margin-bottom:10px; }
+.fill-bar{ height:8px; border-radius:5px; background:var(--border-2); overflow:hidden; }
+.fill-bar-inner{ height:100%; border-radius:5px; width:0%; transition:width .5s ease, background .3s; }
+.fill-bar-inner.ok{ background:var(--ok); }
+.fill-bar-inner.warn{ background:var(--warn); }
+.fill-bar-inner.crit{ background:var(--crit); }
+.fill-meta{ display:flex; justify-content:space-between; font-size:11px; color:var(--text-3); margin-top:5px; }
+.dc-plan{ margin-top:9px; padding-top:9px; border-top:1px solid var(--border-2); display:flex; flex-direction:column; gap:3px; }
+.dc-note{ font-size:11.5px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dc-planned{ font-size:11px; color:var(--text-3); }
+.dreh-card.planned .cam-id{ background:var(--accent); }
+
+/* Events-Log */
+.ev-list{ display:flex; flex-direction:column; }
+.ev-row{ display:flex; align-items:baseline; gap:9px; padding:8px 4px; border-bottom:1px solid var(--border-2); font-size:13px; }
+.ev-row:last-child{ border-bottom:none; }
+.ev-time{ font-size:12px; color:var(--text-3); flex:none; }
+.ev-cam{ font-size:11px; font-weight:600; background:var(--border-2); color:var(--text-2); padding:1px 6px; border-radius:5px; flex:none; }
+.ev-text{ flex:1; }
+.ev-warn90 .ev-text, .ev-warn75 .ev-text{ color:var(--crit); font-weight:600; }
+.ev-start .ev-cam{ background:var(--ok); color:#fff; }
+.ev-stop  .ev-cam{ background:var(--text); color:#fff; }
+
+/* Shoot-Sheet */
+.ss-status{ display:flex; align-items:center; gap:9px; margin-bottom:6px; }
+.ss-card{ font-size:12px; color:var(--text-3); }
+.ss-clock{ font-size:40px; font-weight:700; text-align:center; margin:6px 0 14px; }
+.ss-fill{ height:12px; }
+.ss-fillmeta{ text-align:center; font-size:12px; color:var(--text-3); margin:8px 0 14px; }
+.ss-plannote{ background:var(--bg); border:1px solid var(--border-2); border-radius:9px; padding:9px 11px; font-size:13px; color:var(--text-2); margin-bottom:14px; }
+.ss-actions{ display:flex; flex-direction:column; gap:9px; margin-bottom:16px; }
+.ss-actions .btn{ width:100%; }
+.ss-note{ display:flex; gap:8px; }
+.ss-note input{ flex:1; padding:11px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); }
+.ss-note input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,83,10,.1); }
+
+/* Warn-Banner */
+.warn-banner{
+  position:fixed; top:0; left:0; right:0; z-index:70;
+  max-width:var(--maxw); margin:0 auto;
+  padding:calc(env(safe-area-inset-top) + 12px) 18px 12px;
+  font-size:13.5px; font-weight:600; color:#fff; text-align:center;
+  transform:translateY(-105%); transition:transform .3s cubic-bezier(.32,.72,0,1);
+}
+.warn-banner.show{ transform:translateY(0); }
+.warn-banner.warn{ background:var(--warn); }
+.warn-banner.crit{ background:var(--crit); }
+
+/* ============================================================
+   Phase 4 — Bericht
+   ============================================================ */
+.rep-stats{ display:flex; gap:22px; flex-wrap:wrap; }
+.rep-stats > div{ display:flex; flex-direction:column; }
+.rep-v{ font-size:20px; font-weight:700; }
+.rep-k{ font-size:11px; color:var(--text-3); }
+.rep-note{ color:var(--text-2); font-size:12px; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wk-table .status-badge{ font-size:9.5px; padding:2px 6px; }
+
+@media (min-width:560px){
+  .cam-specs{ grid-template-columns:repeat(4,1fr); }
+  .dash-grid{ grid-template-columns:repeat(4,1fr); }
+  .dreh-grid{ grid-template-columns:repeat(3,1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== AUTH SCREEN ===================== -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <h1 class="auth-logo">H.E.A.T<span class="dot">.</span></h1>
+    <p class="auth-sub">CAMERA&nbsp;MANAGER</p>
+    <form id="auth-form" autocomplete="off">
+      <div class="auth-field">
+        <input type="password" id="auth-input" class="mono" placeholder="Passwort"
+               inputmode="text" autocapitalize="off" autocomplete="current-password">
+      </div>
+      <div class="auth-err" id="auth-err">Falsches Passwort</div>
+      <button type="submit" class="btn btn-primary">Entsperren</button>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app">
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div>
+        <p class="app-title"><b>H.E.A.T<span class="dot">.</span></b> &nbsp;Kamera-Management</p>
+        <h2 class="view-title" id="view-title">Kameras</h2>
+      </div>
+      <div id="header-action"></div>
+    </div>
+  </header>
+
+  <main id="view-container"></main>
+
+  <nav class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="nav-item" data-view="plan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/>
+        </svg>
+        <span>Plan</span>
+      </button>
+      <button class="nav-item" data-view="dreh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Dreh</span>
+      </button>
+      <button class="nav-item active" data-view="kameras">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2L9 4h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.3"/>
+        </svg>
+        <span>Kameras</span>
+      </button>
+      <button class="nav-item" data-view="bericht">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 2.5h8l4 4v15a0 0 0 0 1 0 0H6a0 0 0 0 1 0 0z" /><path d="M14 2.5v4h4M9 13h6M9 17h6"/>
+        </svg>
+        <span>Bericht</span>
+      </button>
+    </div>
+  </nav>
+</div>
+
+<!-- ===================== BOTTOM SHEET ===================== -->
+<div class="sheet-backdrop" id="sheet-backdrop"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-header">
+    <button class="sheet-close" id="sheet-cancel">Abbrechen</button>
+    <h3 id="sheet-title">Kamera</h3>
+    <button class="sheet-close" id="sheet-save">Sichern</button>
+  </div>
+  <div class="sheet-body" id="sheet-body"></div>
+</div>
+
+<!-- ===================== WARN-BANNER (Drehmodus 75/90 %) ===================== -->
+<div id="warn-banner" class="warn-banner"></div>
+
+<!-- ===================== TOAST ===================== -->
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   H.E.A.T. Camera Manager — App Logic
+   Phase 1 + SCHRITT 1: Supabase Integration (localStorage-Fallback)
+   ============================================================ */
+"use strict";
+
+/* ============================================================
+   Supabase Konfiguration
+   ------------------------------------------------------------
+   Trage hier deine Projekt-URL und den anon/public Key ein.
+   Solange Platzhalter stehen (oder das SDK/Netz fehlt), läuft
+   die App automatisch im reinen localStorage-Modus weiter.
+   ============================================================ */
+const SUPABASE_URL = "https://kjlynpqhadyiuuvwdvwk.supabase.co";
+const SUPABASE_KEY = "sb_publishable_hvBHS8DeIOdVcpf2Zn79vQ_EnhdH43C";
+
+/* Defensive Initialisierung: createClient darf die App NIE crashen.
+   Bei Platzhaltern / fehlendem SDK bleibt sb = null → localStorage-only. */
+let sb = null;
+try {
+  if (window.supabase && typeof SUPABASE_URL === "string" && SUPABASE_URL.startsWith("http")) {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+} catch (e) {
+  console.warn("[H.E.A.T.] Supabase-Init fehlgeschlagen → localStorage-Modus:", e && e.message);
+  sb = null;
+}
+
+/* ---------- Konstanten ---------- */
+const AUTH_PASSWORD = "heat2026";
+const AUTH_KEY      = "heat_auth_token";       // bleibt rein in localStorage
+const STORE_PREFIX  = "heat:";                 // localStorage-Cache/Fallback Präfix
+const KV_TABLE      = "kv_store";              // Supabase Key-Value-Tabelle
+
+const CARD_TYPES = ["Codex Compact Drive", "CFexpress Type B", "CFexpress Type A", "AXS", "DJI PROSSD", "microSD", "SD UHS-II", "SSD"];
+
+/* Voreingestellte Kameras (Seed) — offizielle Datenraten @25p (Recherche 2026-06-20).
+   Bei Bump von CAMERAS_VERSION werden gespeicherte Kameras einmalig neu geseedet. */
+const CAMERAS_VERSION = 2;
+const DEFAULT_CAMERAS = [
+  { id:"A1",  name:"Alexa 35 Totale",  codec:"ARRIRAW 4.6K OG (HDE)",  bitrate:290, cardType:"Codex Compact Drive", cardSize:1000 },
+  { id:"A2",  name:"Alexa 35 Zoom",    codec:"ProRes 4444 XQ · 4K",    bitrate:231, cardType:"Codex Compact Drive", cardSize:1000 },
+  { id:"FX1", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"FX2", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"FX3", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"FX4", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"V1",  name:"Venice 2 + Rialto",codec:"X-OCN LT · 6K 3:2",      bitrate:138, cardType:"AXS",                cardSize:512 },
+  { id:"R1",  name:"Ronin 4D",         codec:"ProRes RAW · 6K",        bitrate:170, cardType:"DJI PROSSD",          cardSize:1000 },
+  { id:"AC1", name:"Actioncam",        codec:"H.265 4K (Platzhalter)", bitrate:13,  cardType:"microSD",            cardSize:128 },
+  { id:"AC2", name:"Actioncam",        codec:"H.265 4K (Platzhalter)", bitrate:13,  cardType:"microSD",            cardSize:128 },
+];
+
+/* ============================================================
+   Storage-Wrapper (Supabase + localStorage)
+   ------------------------------------------------------------
+   API:  await Store.get(collection, key="all")
+         await Store.set(collection, key, value)
+         await Store.delete(collection, key)
+         await Store.list(collection)
+
+   - Quelle der Wahrheit: Supabase-Tabelle `kv_store`
+     (Spalten: collection text, key text, value jsonb, PK(collection,key)).
+   - Jeder set() schreibt ZUERST in den lokalen Cache (Offline-Sicherheit)
+     und versucht dann den Cloud-Upsert.
+   - Jeder Supabase-Fehler fällt still auf localStorage zurück.
+   - Der Auth-Token liegt separat & direkt in localStorage (siehe Auth).
+   ============================================================ */
+const Store = {
+  /* aktiv nur wenn ein gültiger Client existiert */
+  cloud(){ return !!sb; },
+
+  _lsKey(collection, key){ return STORE_PREFIX + collection + ":" + key; },
+
+  _cacheGet(collection, key){
+    try { const raw = localStorage.getItem(this._lsKey(collection, key)); return raw == null ? null : JSON.parse(raw); }
+    catch(e){ return null; }
+  },
+  _cacheSet(collection, key, value){
+    try { localStorage.setItem(this._lsKey(collection, key), JSON.stringify(value)); } catch(e){}
+  },
+  _cacheDel(collection, key){
+    try { localStorage.removeItem(this._lsKey(collection, key)); } catch(e){}
+  },
+
+  async get(collection, key = "all"){
+    if(this.cloud()){
+      try {
+        const { data, error } = await sb
+          .from(KV_TABLE).select("value")
+          .eq("collection", collection).eq("key", key)
+          .maybeSingle();
+        if(error) throw error;
+        SyncStatus.mark(true);                       // Query erfolgreich = Cloud erreichbar
+        if(data){ this._cacheSet(collection, key, data.value); return data.value; }
+        /* Cloud-Zeile fehlt → lokale Kopie einmalig hochladen (Erst-Sync) */
+        const cached = this._cacheGet(collection, key);
+        if(cached != null) this.set(collection, key, cached);
+        return cached;
+      } catch(e){
+        console.warn("[Store.get] Supabase → localStorage:", e && e.message);
+        SyncStatus.mark(false);
+        return this._cacheGet(collection, key);
+      }
+    }
+    return this._cacheGet(collection, key);
+  },
+
+  async set(collection, key, value){
+    /* immer zuerst lokal sichern (überlebt Offline / Crash) */
+    this._cacheSet(collection, key, value);
+    if(this.cloud()){
+      try {
+        const { error } = await sb
+          .from(KV_TABLE)
+          .upsert({ collection, key, value, updated_at: new Date().toISOString() },
+                  { onConflict: "collection,key" });
+        if(error) throw error;
+        SyncStatus.mark(true);
+      } catch(e){
+        console.warn("[Store.set] Supabase → localStorage:", e && e.message);
+        SyncStatus.mark(false);
+      }
+    }
+    return value;
+  },
+
+  async delete(collection, key){
+    this._cacheDel(collection, key);
+    if(this.cloud()){
+      try {
+        const { error } = await sb.from(KV_TABLE).delete()
+          .eq("collection", collection).eq("key", key);
+        if(error) throw error;
+        SyncStatus.mark(true);
+      } catch(e){
+        console.warn("[Store.delete] Supabase → localStorage:", e && e.message);
+        SyncStatus.mark(false);
+      }
+    }
+  },
+
+  async list(collection){
+    if(this.cloud()){
+      try {
+        const { data, error } = await sb.from(KV_TABLE).select("key").eq("collection", collection);
+        if(error) throw error;
+        SyncStatus.mark(true);
+        return (data || []).map(r => r.key);
+      } catch(e){
+        console.warn("[Store.list] Supabase → localStorage:", e && e.message);
+        SyncStatus.mark(false);
+      }
+    }
+    const prefix = STORE_PREFIX + collection + ":";
+    const keys = [];
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && k.startsWith(prefix)) keys.push(k.slice(prefix.length));
+    }
+    return keys;
+  }
+};
+
+/* ============================================================
+   Sync-Status (zeigt Cloud vs. lokal im Header)
+   ============================================================ */
+const SyncStatus = {
+  _state: null,   // true = cloud ok, false = lokal
+  mark(ok){
+    if(this._state === ok) return;
+    this._state = ok;
+    this.render();
+  },
+  render(){
+    const el = document.getElementById("sync-dot");
+    if(!el) return;
+    if(!Store.cloud()){
+      el.className = "sync-dot local";
+      el.textContent = "Lokal";
+      return;
+    }
+    const offline = this._state === false;   // null/true = verbunden (optimistisch)
+    el.className = "sync-dot " + (offline ? "local" : "cloud");
+    el.textContent = offline ? "Offline" : "Cloud";
+  }
+};
+
+/* ============================================================
+   App-State
+   ============================================================ */
+const State = {
+  cameras: [],
+  currentView: "kameras",
+};
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $  = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+
+function esc(s){
+  return String(s ?? "").replace(/[&<>"']/g, c => (
+    {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]
+  ));
+}
+
+let _toastTimer;
+function toast(msg){
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=> t.classList.remove("show"), 2200);
+}
+
+/* ============================================================
+   Auth
+   ============================================================ */
+const Auth = {
+  async check(){
+    try { return localStorage.getItem(AUTH_KEY) ? true : false; }
+    catch(e){ return false; }
+  },
+  grant(){
+    try { localStorage.setItem(AUTH_KEY, "ok:"+Date.now()); } catch(e){}
+  },
+  init(){
+    const form  = $("#auth-form");
+    const input = $("#auth-input");
+    const err   = $("#auth-err");
+
+    form.addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      if(input.value === AUTH_PASSWORD){
+        this.grant();
+        err.classList.remove("show");
+        await enterApp();
+      } else {
+        err.classList.add("show");
+        input.classList.remove("shake");
+        void input.offsetWidth;       // reflow → Animation neu starten
+        input.classList.add("shake");
+        input.value = "";
+        input.focus();
+      }
+    });
+  }
+};
+
+/* ============================================================
+   Daten laden / sichern
+   ============================================================ */
+async function loadCameras(){
+  let cams = await Store.get("cameras", "all");
+  const ver = await Store.get("camerasVersion", "all");
+  // Erst-Seed ODER einmaliges Re-Seed bei neuer offizieller Datenbasis
+  if(!Array.isArray(cams) || cams.length === 0 || ver !== CAMERAS_VERSION){
+    cams = DEFAULT_CAMERAS.map(c => ({...c}));
+    await Store.set("cameras", "all", cams);
+    await Store.set("camerasVersion", "all", CAMERAS_VERSION);
+  }
+  State.cameras = cams;
+}
+
+async function saveCameras(){
+  await Store.set("cameras", "all", State.cameras);
+}
+
+/* ============================================================
+   Views / Router
+   ============================================================ */
+const VIEW_TITLES = { plan:"Wochenplan", dreh:"Drehmodus", kameras:"Kameras", bericht:"Bericht" };
+
+const Views = {
+  kameras: renderCameras,
+  plan:    renderPlan,
+  dreh:    renderDreh,
+  bericht: renderBericht,
+};
+
+function placeholder(phase, title, text){
+  return `
+    <div class="placeholder">
+      <div class="ph-num">PHASE ${phase}</div>
+      <h3>${esc(title)}</h3>
+      <p>${esc(text)}</p>
+    </div>`;
+}
+
+function setView(view){
+  State.currentView = view;
+  $("#view-title").textContent = VIEW_TITLES[view] || "";
+  $("#view-container").innerHTML = Views[view]();
+  $$(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+
+  // Header-Aktion nur im Kameras-View
+  const ha = $("#header-action");
+  if(view === "kameras"){
+    ha.innerHTML = `<button class="btn btn-ghost btn-sm" id="add-cam-btn">+ Kamera</button>`;
+    $("#add-cam-btn").addEventListener("click", ()=> openCameraSheet(null));
+  } else {
+    ha.innerHTML = "";
+  }
+
+  // Drehmodus: Live-Tick + Realtime nur aktiv, wenn sichtbar
+  if(view === "dreh") enterDreh(); else leaveDreh();
+
+  window.scrollTo(0,0);
+}
+
+/* ---------- Kameras-View ---------- */
+function renderCameras(){
+  if(State.cameras.length === 0){
+    return `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2L9 4h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.3"/>
+        </svg>
+        <p>Noch keine Kameras.<br>Tippe oben auf „+ Kamera".</p>
+      </div>`;
+  }
+
+  const total = State.cameras.length;
+  const cards = State.cameras.map(camCardHTML).join("");
+  return `
+    <div class="section-label">${total} Kamera${total!==1?"s":""} im Setup</div>
+    ${cards}
+    <button class="btn btn-ghost btn-block" id="add-cam-btn-2" style="margin-top:6px;">+ Weitere Kamera</button>
+  `;
+}
+
+function camCardHTML(c){
+  return `
+  <div class="card cam-card" data-id="${esc(c.id)}">
+    <div class="cam-rail"></div>
+    <div class="cam-body">
+      <div class="cam-head">
+        <span class="cam-id">${esc(c.id)}</span>
+        <span class="cam-name">${esc(c.name)}</span>
+        <button class="cam-edit" data-edit="${esc(c.id)}" aria-label="Bearbeiten">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="cam-specs">
+        <div class="spec"><div class="spec-k">Codec</div><div class="spec-v">${esc(c.codec)}</div></div>
+        <div class="spec"><div class="spec-k">Datenrate</div><div class="spec-v">${esc(c.bitrate)} <span class="u">MB/s</span></div></div>
+        <div class="spec"><div class="spec-k">Medium</div><div class="spec-v">${esc(c.cardType)}</div></div>
+        <div class="spec"><div class="spec-k">Kapazität</div><div class="spec-v">${esc(c.cardSize)} <span class="u">GB</span></div></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ============================================================
+   Bottom-Sheet: Kamera anlegen / bearbeiten
+   ============================================================ */
+let _editingId = null;
+let _sheetMode = "camera";   // "camera" | "shoot"
+let _shootCam  = null;       // aktive Kamera im Shoot-Sheet
+
+function openCameraSheet(id){
+  _editingId = id;
+  _sheetMode = "camera";
+  $("#sheet-cancel").style.visibility = "";
+  $("#sheet-save").textContent = "Sichern";
+  const c = id ? State.cameras.find(x => x.id === id) : null;
+  const isNew = !c;
+
+  $("#sheet-title").textContent = isNew ? "Neue Kamera" : "Kamera bearbeiten";
+
+  const opts = CARD_TYPES.map(t =>
+    `<option value="${esc(t)}" ${c && c.cardType===t ? "selected":""}>${esc(t)}</option>`
+  ).join("");
+  const customCard = c && !CARD_TYPES.includes(c.cardType);
+
+  $("#sheet-body").innerHTML = `
+    <div class="field-row">
+      <div class="field" style="flex:0 0 38%;">
+        <label>Kürzel</label>
+        <input type="text" id="f-id" class="mono" maxlength="6" placeholder="A1"
+               value="${esc(c ? c.id : "")}" autocapitalize="characters">
+      </div>
+      <div class="field">
+        <label>Bezeichnung</label>
+        <input type="text" id="f-name" placeholder="z. B. Alexa 35" value="${esc(c ? c.name : "")}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Codec / Format</label>
+      <input type="text" id="f-codec" placeholder="z. B. ARRIRAW LF" value="${esc(c ? c.codec : "")}">
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Datenrate</label>
+        <div class="suffix-wrap">
+          <input type="number" id="f-bitrate" class="mono" inputmode="decimal" min="0" step="1"
+                 placeholder="0" value="${c ? esc(c.bitrate) : ""}">
+          <span class="suffix">MB/s</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Kapazität</label>
+        <div class="suffix-wrap">
+          <input type="number" id="f-size" class="mono" inputmode="decimal" min="0" step="1"
+                 placeholder="0" value="${c ? esc(c.cardSize) : ""}">
+          <span class="suffix">GB</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Speichermedium</label>
+      <select id="f-cardtype">
+        ${opts}
+        <option value="__custom" ${customCard?"selected":""}>Andere…</option>
+      </select>
+      <input type="text" id="f-cardtype-custom" placeholder="Eigener Medientyp"
+             value="${customCard ? esc(c.cardType) : ""}"
+             style="margin-top:9px; display:${customCard?"block":"none"};">
+    </div>
+
+    <div class="sheet-actions">
+      ${isNew ? "" : `<button class="btn btn-danger btn-block" id="f-delete">Kamera löschen</button>`}
+    </div>
+  `;
+
+  // Custom-Medium Toggle
+  const sel = $("#f-cardtype"), custom = $("#f-cardtype-custom");
+  sel.addEventListener("change", ()=>{
+    custom.style.display = sel.value === "__custom" ? "block" : "none";
+    if(sel.value === "__custom") custom.focus();
+  });
+
+  if(!isNew){
+    $("#f-delete").addEventListener("click", ()=> deleteCamera(id));
+  }
+
+  openSheet();
+  if(isNew) setTimeout(()=> $("#f-id").focus(), 320);
+}
+
+function readCameraForm(){
+  const id   = $("#f-id").value.trim().toUpperCase();
+  const name = $("#f-name").value.trim();
+  const codec= $("#f-codec").value.trim();
+  const bitrate = parseFloat($("#f-bitrate").value);
+  const cardSize= parseFloat($("#f-size").value);
+  let cardType = $("#f-cardtype").value;
+  if(cardType === "__custom") cardType = $("#f-cardtype-custom").value.trim();
+
+  return { id, name, codec, bitrate, cardSize, cardType };
+}
+
+async function saveCameraForm(){
+  const d = readCameraForm();
+
+  // Validierung
+  if(!d.id){ toast("Kürzel fehlt"); $("#f-id").focus(); return; }
+  if(!d.name){ toast("Bezeichnung fehlt"); $("#f-name").focus(); return; }
+  if(!d.codec) d.codec = "—";
+  if(!d.cardType) d.cardType = "—";
+  if(isNaN(d.bitrate) || d.bitrate < 0) d.bitrate = 0;
+  if(isNaN(d.cardSize) || d.cardSize < 0) d.cardSize = 0;
+
+  // ID-Eindeutigkeit prüfen
+  const clash = State.cameras.find(c => c.id === d.id && c.id !== _editingId);
+  if(clash){ toast(`Kürzel „${d.id}" ist schon vergeben`); $("#f-id").focus(); return; }
+
+  if(_editingId){
+    const idx = State.cameras.findIndex(c => c.id === _editingId);
+    if(idx >= 0) State.cameras[idx] = { ...State.cameras[idx], ...d };
+    toast("Kamera aktualisiert");
+  } else {
+    State.cameras.push(d);
+    toast("Kamera hinzugefügt");
+  }
+
+  await saveCameras();
+  closeSheet();
+  setView("kameras");
+}
+
+async function deleteCamera(id){
+  const c = State.cameras.find(x => x.id === id);
+  if(!c) return;
+  if(!confirm(`Kamera „${id} — ${c.name}" wirklich löschen?`)) return;
+  State.cameras = State.cameras.filter(x => x.id !== id);
+  await saveCameras();
+  closeSheet();
+  setView("kameras");
+  toast("Kamera gelöscht");
+}
+
+/* ---------- Sheet open/close ---------- */
+function openSheet(){
+  $("#sheet-backdrop").classList.add("open");
+  $("#sheet").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeSheet(){
+  $("#sheet-backdrop").classList.remove("open");
+  $("#sheet").classList.remove("open");
+  document.body.style.overflow = "";
+  _editingId = null;
+  _sheetMode = "camera";
+  _shootCam  = null;
+  $("#sheet-cancel").style.visibility = "";
+  $("#sheet-save").textContent = "Sichern";
+}
+
+/* ============================================================
+   Phase 2 — Planungsmodus (Wochenplan, Dashboard, Szenarien)
+   ============================================================ */
+const DAYS = [
+  { key:"mo", label:"Mo", full:"Montag" },
+  { key:"di", label:"Di", full:"Dienstag" },
+  { key:"mi", label:"Mi", full:"Mittwoch" },
+  { key:"do", label:"Do", full:"Donnerstag" },
+  { key:"fr", label:"Fr", full:"Freitag" },
+];
+const DEFAULT_SETTINGS = { usable: 93, backupSpeed: 150, night: 12 };
+const MAX_SCENARIOS = 5;
+const DEFAULT_HOURS  = 8;
+
+const Plan = {
+  week: null,        // { days: { mo:{cams:{id:{on,h}}, note}, … } }
+  settings: null,    // { usable, backupSpeed, night }
+  scenarios: [],     // [{ id, name, ts, week, gb, changes }]  max 5
+  activeDay: "mo",   // "mo".."fr" | "sum"
+  compare: false,
+};
+
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+function emptyWeek(){
+  const days = {};
+  DAYS.forEach(d => days[d.key] = { cams:{}, note:"" });
+  return { days };
+}
+
+async function loadPlan(){
+  Plan.week = await Store.get("weekplan", "all");
+  if(!Plan.week || !Plan.week.days) Plan.week = emptyWeek();
+  DAYS.forEach(d => { if(!Plan.week.days[d.key]) Plan.week.days[d.key] = { cams:{}, note:"" }; });
+
+  const s = await Store.get("settings", "all");
+  Plan.settings = s ? { ...DEFAULT_SETTINGS, ...s } : { ...DEFAULT_SETTINGS };
+
+  const sc = await Store.get("scenarios", "all");
+  Plan.scenarios = Array.isArray(sc) ? sc : [];
+}
+
+let _weekSaveTimer;
+function saveWeekDebounced(){
+  clearTimeout(_weekSaveTimer);
+  _weekSaveTimer = setTimeout(()=> Store.set("weekplan", "all", Plan.week), 400);
+}
+function saveWeekNow(){ clearTimeout(_weekSaveTimer); return Store.set("weekplan", "all", Plan.week); }
+function saveSettings(){ return Store.set("settings", "all", Plan.settings); }
+function saveScenarios(){ return Store.set("scenarios", "all", Plan.scenarios); }
+
+/* ---------- Berechnungen ---------- */
+function camDayData(cam, entry){
+  const on = !!(entry && entry.on);
+  const h  = on ? (parseFloat(entry.h) || 0) : 0;
+  const mb = (parseFloat(cam.bitrate) || 0) * 3600 * h;            // MB (dezimal)
+  const gb = mb / 1000;
+  const usableCardGB = (parseFloat(cam.cardSize) || 0) * (Plan.settings.usable / 100);
+  const cards   = (gb > 0 && usableCardGB > 0) ? Math.ceil(gb / usableCardGB) : 0;
+  const changes = Math.max(0, cards - 1);
+  return { on, h, mb, gb, cards, changes };
+}
+function dayTotalsFor(week, dayKey){
+  const day = (week.days || {})[dayKey] || { cams:{} };
+  let gb=0, changes=0, cards=0, active=0;
+  State.cameras.forEach(cam => {
+    const r = camDayData(cam, (day.cams || {})[cam.id]);
+    if(r.on){ active++; gb += r.gb; changes += r.changes; cards += r.cards; }
+  });
+  const backupSec = Plan.settings.backupSpeed > 0 ? (gb * 1000) / Plan.settings.backupSpeed : 0;
+  const ready = (backupSec / 3600) <= Plan.settings.night;
+  return { gb, changes, cards, active, backupSec, ready };
+}
+function weekTotalsFor(week){
+  let gb=0, changes=0, cards=0, maxBackup=0;
+  DAYS.forEach(d => {
+    const t = dayTotalsFor(week, d.key);
+    gb += t.gb; changes += t.changes; cards += t.cards;
+    if(t.backupSec > maxBackup) maxBackup = t.backupSec;
+  });
+  return { gb, tb: gb/1000, changes, cards, maxBackup };
+}
+const dayTotals  = (dayKey) => dayTotalsFor(Plan.week, dayKey);
+const weekTotals = () => weekTotalsFor(Plan.week);
+
+/* ---------- Formatierung ---------- */
+function fmtGB(gb){
+  if(gb >= 1000) return (gb/1000).toFixed(2) + " TB";
+  if(gb >= 100)  return gb.toFixed(0) + " GB";
+  if(gb > 0)     return gb.toFixed(1) + " GB";
+  return "0 GB";
+}
+const fmtTB = (gb) => (gb/1000).toFixed(2) + " TB";
+function fmtDur(sec){
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec/3600);
+  const m = Math.round((sec % 3600) / 60);
+  return h + ":" + String(m).padStart(2, "0");
+}
+
+/* ---------- Render: Plan-View ---------- */
+function renderPlan(){
+  if(Plan.compare) return renderCompareView();
+
+  const tabs = DAYS.map(d =>
+    `<button class="seg-tab ${Plan.activeDay===d.key?'active':''}" data-day="${d.key}">
+       <span class="seg-d">${d.label}</span>
+       <span class="seg-gb mono">${fmtGB(dayTotals(d.key).gb)}</span>
+     </button>`
+  ).join("") +
+  `<button class="seg-tab seg-sum ${Plan.activeDay==='sum'?'active':''}" data-day="sum">
+     <span class="seg-d">Σ</span>
+     <span class="seg-gb mono">${fmtTB(weekTotals().gb)}</span>
+   </button>`;
+
+  const body = Plan.activeDay === "sum" ? renderWeek() : renderDay(Plan.activeDay);
+  return `<div class="seg-tabs">${tabs}</div><div id="plan-body">${body}</div>`;
+}
+
+function renderDay(dayKey){
+  const day  = Plan.week.days[dayKey] || { cams:{}, note:"" };
+  const meta = DAYS.find(d => d.key === dayKey);
+
+  if(State.cameras.length === 0){
+    return `<div class="empty-state"><p>Erst Kameras anlegen,<br>dann den Tag planen.</p></div>`;
+  }
+
+  const rows = State.cameras.map(cam => {
+    const entry = (day.cams || {})[cam.id];
+    const r = camDayData(cam, entry);
+    const note = (entry && entry.note) ? entry.note : "";
+    return `
+      <div class="plan-cam ${r.on?'on':''}" data-cam="${esc(cam.id)}">
+        <div class="pc-main">
+          <label class="switch">
+            <input type="checkbox" data-toggle="${esc(cam.id)}" ${r.on?'checked':''}>
+            <span class="track"></span><span class="thumb"></span>
+          </label>
+          <span class="pc-id">${esc(cam.id)}</span>
+          <span class="pc-name">${esc(cam.name)}</span>
+          <div class="pc-hours">
+            <input type="number" class="mono" inputmode="decimal" min="0" step="0.5"
+                   data-hours="${esc(cam.id)}" placeholder="0"
+                   value="${r.on && r.h ? esc(r.h) : ''}" ${r.on ? '' : 'disabled'}>
+            <span class="u">h</span>
+          </div>
+          <span class="pc-gb mono" id="camgb-${esc(cam.id)}">${r.on ? fmtGB(r.gb) : '–'}</span>
+        </div>
+        ${ r.on ? `<input type="text" class="pc-note" data-camnote="${esc(cam.id)}"
+                 placeholder="Einsatz / Rolle — z. B. Wide Shot Entführungsraum" value="${esc(note)}">` : '' }
+      </div>`;
+  }).join("");
+
+  return `
+    <div class="card card-pad">
+      <div class="plan-cam-list">${rows}</div>
+    </div>
+    <div class="card card-pad">
+      <label class="mini-label">Notiz · ${esc(meta.full)}</label>
+      <textarea class="note-area" data-note rows="2"
+        placeholder="z. B. Drehort, Szenen, Besonderheiten …">${esc(day.note || '')}</textarea>
+    </div>
+    ${renderDayDash(dayKey)}
+  `;
+}
+
+function renderDayDash(dayKey){
+  const t = dayTotals(dayKey);
+  return `
+  <div class="dash-grid">
+    <div class="stat">
+      <div class="stat-k">Datenmenge</div>
+      <div class="stat-v mono" id="dash-gb">${fmtGB(t.gb)}</div>
+      <div class="stat-sub" id="dash-cams">${t.active} Kamera${t.active!==1?'s':''} aktiv</div>
+    </div>
+    <div class="stat">
+      <div class="stat-k">Kartenwechsel</div>
+      <div class="stat-v mono" id="dash-changes">${t.changes}</div>
+      <div class="stat-sub" id="dash-cards">${t.cards} Karte${t.cards!==1?'n':''} nötig</div>
+    </div>
+    <div class="stat">
+      <div class="stat-k">Sicherungszeit</div>
+      <div class="stat-v mono" id="dash-backup">${fmtDur(t.backupSec)}</div>
+      <div class="stat-sub">@ ${esc(Plan.settings.backupSpeed)} MB/s</div>
+    </div>
+    <div class="stat">
+      <div class="stat-k">Bereit für morgen</div>
+      <div class="stat-v" id="dash-ready">${readyBadge(t.ready)}</div>
+      <div class="stat-sub">Nacht-Fenster ${esc(Plan.settings.night)} h</div>
+    </div>
+  </div>`;
+}
+const readyBadge = (ready) => ready
+  ? `<span class="rb rb-ok">✓ Bereit</span>`
+  : `<span class="rb rb-warn">⚠ Knapp</span>`;
+
+/* ---------- Render: Woche-Übersicht ---------- */
+function weekTotalHTML(){
+  const wk = weekTotals();
+  return `
+    <div><span class="wk-total-v mono">${fmtTB(wk.gb)}</span><span class="wk-total-k">Datenmenge</span></div>
+    <div><span class="wk-total-v mono">${wk.changes}</span><span class="wk-total-k">Kartenwechsel</span></div>
+    <div><span class="wk-total-v mono">${fmtDur(wk.maxBackup)}</span><span class="wk-total-k">längste Sicherung</span></div>`;
+}
+function weekRowsHTML(){
+  return DAYS.map(d => {
+    const t = dayTotals(d.key);
+    return `<tr>
+      <td class="wk-day">${d.label}</td>
+      <td class="mono">${t.active}</td>
+      <td class="mono">${fmtGB(t.gb)}</td>
+      <td class="mono">${t.changes}</td>
+      <td class="mono">${fmtDur(t.backupSec)}</td>
+      <td>${readyBadge(t.ready)}</td>
+    </tr>`;
+  }).join("");
+}
+function renderWeek(){
+  return `
+    <div class="card">
+      <div class="section-label" style="margin:14px 16px 2px;">Woche gesamt</div>
+      <div class="wk-total" id="wk-total">${weekTotalHTML()}</div>
+      <table class="wk-table">
+        <thead><tr><th>Tag</th><th>Cams</th><th>Daten</th><th>Wechsel</th><th>Sicherung</th><th>Morgen</th></tr></thead>
+        <tbody id="wk-tbody">${weekRowsHTML()}</tbody>
+      </table>
+    </div>
+    ${renderAssumptions()}
+    ${renderScenarios()}
+  `;
+}
+
+function renderAssumptions(){
+  const s = Plan.settings;
+  return `
+  <div class="card card-pad">
+    <div class="section-label" style="margin:0 0 12px;">Annahmen</div>
+    <div class="assume-grid">
+      <div class="field" style="margin:0;">
+        <label>Nutzkapazität</label>
+        <div class="suffix-wrap">
+          <input type="number" class="mono" data-setting="usable" min="50" max="100" step="1" value="${esc(s.usable)}">
+          <span class="suffix">%</span>
+        </div>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>Backup-Speed</label>
+        <div class="suffix-wrap">
+          <input type="number" class="mono" data-setting="backupSpeed" min="1" step="10" value="${esc(s.backupSpeed)}">
+          <span class="suffix">MB/s</span>
+        </div>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>Nacht-Fenster</label>
+        <div class="suffix-wrap">
+          <input type="number" class="mono" data-setting="night" min="1" max="24" step="1" value="${esc(s.night)}">
+          <span class="suffix">h</span>
+        </div>
+      </div>
+    </div>
+    <p class="assume-hint">„1 TB"-Karten haben real ~93 % nutzbar — beeinflusst Kartenwechsel & Sicherungszeit.</p>
+  </div>`;
+}
+
+function renderScenarios(){
+  const list = Plan.scenarios.map(sc => `
+    <div class="scn-card">
+      <div class="scn-info">
+        <div class="scn-name">${esc(sc.name)}</div>
+        <div class="scn-meta mono">${fmtTB(sc.gb || 0)} · ${sc.changes || 0} Wechsel</div>
+      </div>
+      <div class="scn-actions">
+        <button class="btn btn-ghost btn-sm" data-load-scn="${esc(sc.id)}">Laden</button>
+        <button class="btn btn-danger btn-sm" data-del-scn="${esc(sc.id)}">✕</button>
+      </div>
+    </div>`).join("");
+
+  return `
+  <div class="card card-pad">
+    <div class="section-label" style="margin:0 0 12px;">
+      Szenarien <span class="mono" style="color:var(--text-3);font-weight:500;">(${Plan.scenarios.length}/${MAX_SCENARIOS})</span>
+    </div>
+    ${ Plan.scenarios.length
+        ? `<div class="scn-list">${list}</div>`
+        : `<p class="assume-hint" style="margin:0 0 12px;">Noch keine Szenarien gesichert.</p>` }
+    <div class="scn-buttons">
+      <button class="btn btn-primary" data-action="save-scn" ${Plan.scenarios.length>=MAX_SCENARIOS?'disabled':''}>Plan sichern</button>
+      ${ Plan.scenarios.length>=2 ? `<button class="btn btn-ghost" data-action="compare-scn">Vergleichen</button>` : '' }
+    </div>
+  </div>`;
+}
+
+function renderCompareView(){
+  const cols = [{ name:"Aktuell", week:Plan.week }]
+    .concat(Plan.scenarios.map(s => ({ name:s.name, week:s.week })));
+  const totals = cols.map(c => weekTotalsFor(c.week));
+
+  const head = `<th>Tag</th>` + cols.map(c => `<th>${esc(c.name)}</th>`).join("");
+  const dayRows = DAYS.map(d => {
+    const cells = cols.map(c => `<td class="mono">${fmtGB(dayTotalsFor(c.week, d.key).gb)}</td>`).join("");
+    return `<tr><td class="wk-day">${d.label}</td>${cells}</tr>`;
+  }).join("");
+  const chgRow   = `<tr><td>Wechsel</td>${totals.map(t => `<td class="mono">${t.changes}</td>`).join("")}</tr>`;
+  const totalRow = `<tr class="cmp-total"><td>Σ</td>${totals.map(t => `<td class="mono">${fmtTB(t.gb)}</td>`).join("")}</tr>`;
+
+  return `
+    <div class="cmp-head">
+      <button class="btn btn-ghost btn-sm" data-action="compare-back">‹ Zurück</button>
+      <span class="cmp-title">Szenarien-Vergleich</span>
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table class="wk-table cmp-table">
+        <thead><tr>${head}</tr></thead>
+        <tbody>${dayRows}${chgRow}${totalRow}</tbody>
+      </table>
+    </div>`;
+}
+
+/* ---------- Plan: Repaint & Live-Updates ---------- */
+function paintPlan(){ $("#view-container").innerHTML = renderPlan(); }
+
+function setText(id, v){ const el = document.getElementById(id); if(el) el.textContent = v; }
+function updateTabLabels(){
+  DAYS.forEach(d => {
+    const el = document.querySelector(`.seg-tab[data-day="${d.key}"] .seg-gb`);
+    if(el) el.textContent = fmtGB(dayTotals(d.key).gb);
+  });
+  const sum = document.querySelector(`.seg-tab[data-day="sum"] .seg-gb`);
+  if(sum) sum.textContent = fmtTB(weekTotals().gb);
+}
+function updateDayLive(){
+  const dayKey = Plan.activeDay;
+  const day = Plan.week.days[dayKey] || { cams:{} };
+  State.cameras.forEach(cam => {
+    const el = document.getElementById("camgb-" + cam.id);
+    if(!el) return;
+    const r = camDayData(cam, (day.cams || {})[cam.id]);
+    el.textContent = r.on ? fmtGB(r.gb) : "–";
+  });
+  const t = dayTotals(dayKey);
+  setText("dash-gb", fmtGB(t.gb));
+  setText("dash-cams", t.active + " Kamera" + (t.active!==1?"s":"") + " aktiv");
+  setText("dash-changes", t.changes);
+  setText("dash-cards", t.cards + " Karte" + (t.cards!==1?"n":"") + " nötig");
+  setText("dash-backup", fmtDur(t.backupSec));
+  const rb = document.getElementById("dash-ready");
+  if(rb) rb.innerHTML = readyBadge(t.ready);
+  updateTabLabels();
+}
+function updateWeekLive(){
+  const tb = document.getElementById("wk-tbody");
+  if(tb) tb.innerHTML = weekRowsHTML();
+  const tot = document.getElementById("wk-total");
+  if(tot) tot.innerHTML = weekTotalHTML();
+  updateTabLabels();
+}
+
+/* ---------- Plan: Eingabe-Handler ---------- */
+function onToggle(camId, on){
+  const day = Plan.week.days[Plan.activeDay] || (Plan.week.days[Plan.activeDay] = { cams:{}, note:"" });
+  if(!day.cams) day.cams = {};
+  const e = day.cams[camId] || (day.cams[camId] = {});
+  e.on = on;
+  if(on && (e.h === undefined || e.h === "" || e.h === null)) e.h = DEFAULT_HOURS;
+  saveWeekNow();
+  paintPlan();
+}
+function onHoursInput(camId, val){
+  const day = Plan.week.days[Plan.activeDay];
+  if(!day || !day.cams || !day.cams[camId]) return;
+  day.cams[camId].h = val;
+  saveWeekDebounced();
+  updateDayLive();
+}
+function onNoteInput(val){
+  const day = Plan.week.days[Plan.activeDay] || (Plan.week.days[Plan.activeDay] = { cams:{}, note:"" });
+  day.note = val;
+  saveWeekDebounced();
+}
+function onCamNoteInput(camId, val){
+  const day = Plan.week.days[Plan.activeDay];
+  if(!day || !day.cams || !day.cams[camId]) return;
+  day.cams[camId].note = val;
+  saveWeekDebounced();
+}
+function onSettingInput(key, val){
+  const n = parseFloat(val);
+  Plan.settings[key] = isNaN(n) ? DEFAULT_SETTINGS[key] : n;
+  saveSettings();
+  updateWeekLive();
+}
+
+/* ---------- Plan: Szenarien ---------- */
+async function saveScenario(){
+  if(Plan.scenarios.length >= MAX_SCENARIOS){ toast("Maximal " + MAX_SCENARIOS + " Szenarien"); return; }
+  const name = (prompt("Name für dieses Szenario:", "Szenario " + (Plan.scenarios.length + 1)) || "").trim();
+  if(!name) return;
+  const wk = weekTotals();
+  Plan.scenarios.push({
+    id: "scn_" + Date.now(),
+    name, ts: Date.now(),
+    week: clone(Plan.week),
+    gb: wk.gb, changes: wk.changes
+  });
+  await saveScenarios();
+  paintPlan();
+  toast("Szenario gesichert");
+}
+async function loadScenario(id){
+  const sc = Plan.scenarios.find(s => s.id === id);
+  if(!sc) return;
+  if(!confirm(`Szenario „${sc.name}" laden? Der aktuelle Plan wird ersetzt.`)) return;
+  Plan.week = clone(sc.week);
+  DAYS.forEach(d => { if(!Plan.week.days[d.key]) Plan.week.days[d.key] = { cams:{}, note:"" }; });
+  await saveWeekNow();
+  Plan.compare = false;
+  paintPlan();
+  toast("Szenario geladen");
+}
+async function deleteScenario(id){
+  const sc = Plan.scenarios.find(s => s.id === id);
+  if(!sc) return;
+  if(!confirm(`Szenario „${sc.name}" löschen?`)) return;
+  Plan.scenarios = Plan.scenarios.filter(s => s.id !== id);
+  await saveScenarios();
+  paintPlan();
+  toast("Szenario gelöscht");
+}
+
+/* ============================================================
+   Phase 3 — Drehmodus (Live-Timer, Füllstand, Events, Realtime)
+   ------------------------------------------------------------
+   Timer-Regel: NIE die laufende Zeit speichern. Persistiert werden
+   nur  startTs (Beginn des laufenden Segments) + accumMs (Summe der
+   abgeschlossenen Segmente). Laufzeit = accumMs + (now - startTs).
+   ============================================================ */
+const Shoot = { day:null, state:null, tick:null };
+
+function defaultShootDay(){
+  const map = { 1:"mo", 2:"di", 3:"mi", 4:"do", 5:"fr" };
+  return map[new Date().getDay()] || "mo";
+}
+async function loadShoot(dayKey){
+  Shoot.day = dayKey;
+  let s = await Store.get("shoot_days", dayKey);
+  if(!s || typeof s !== "object") s = { cams:{}, events:[] };
+  if(!s.cams) s.cams = {};
+  if(!Array.isArray(s.events)) s.events = [];
+  Shoot.state = s;
+}
+function saveShoot(){ return Store.set("shoot_days", Shoot.day, Shoot.state); }
+
+function defaultCamState(){
+  return { status:"idle", startTs:null, accumMs:0, cardBaseMs:0, cardIndex:1, dayTotalMs:0, warned75:false, warned90:false };
+}
+function camStRead(camId){ return Shoot.state.cams[camId] || defaultCamState(); }   // nicht-mutierend (Render)
+function camSt(camId){                                                              // anlegen (Aktionen)
+  if(!Shoot.state.cams[camId]) Shoot.state.cams[camId] = defaultCamState();
+  return Shoot.state.cams[camId];
+}
+
+/* ---------- Live-Berechnung ---------- */
+function camLive(cam, st){
+  const running = st.status === "running";
+  const totalMs = (st.accumMs || 0) + (running && st.startTs ? Date.now() - st.startTs : 0);
+  const cardMs  = Math.max(0, totalMs - (st.cardBaseMs || 0));
+  const cardGB  = (parseFloat(cam.bitrate) || 0) * (cardMs / 1000) / 1000;   // MB/s·s = MB → GB
+  const usableGB= (parseFloat(cam.cardSize) || 0) * (Plan.settings.usable / 100);
+  const fillPct = usableGB > 0 ? (cardGB / usableGB * 100) : 0;
+  return { running, totalMs, cardMs, cardGB, usableGB, fillPct };
+}
+function fillClass(pct){ return pct >= 90 ? "crit" : pct >= 75 ? "warn" : "ok"; }
+function fmtClock(ms){
+  let s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s/3600); s %= 3600; const m = Math.floor(s/60); s %= 60;
+  return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+}
+function fmtTime(ts){
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0");
+}
+
+/* ---------- Aktionen (mutieren State + loggen + speichern) ---------- */
+function logEvent(camId, type, text){ Shoot.state.events.push({ ts:Date.now(), camId, type, text }); }
+
+function shootStart(camId){
+  const st = camSt(camId);
+  if(st.status === "running") return;
+  if(st.status === "idle" || st.status === "stopped"){
+    st.accumMs = 0; st.cardBaseMs = 0; st.cardIndex = 1; st.warned75 = false; st.warned90 = false;
+  }
+  st.status = "running"; st.startTs = Date.now();
+  logEvent(camId, "start", "Aufnahme gestartet");
+  saveShoot();
+}
+function shootPause(camId){
+  const st = camSt(camId);
+  if(st.status !== "running") return;
+  st.accumMs += Date.now() - st.startTs; st.startTs = null; st.status = "paused";
+  logEvent(camId, "pause", "Pausiert · " + fmtClock(st.accumMs));
+  saveShoot();
+}
+function shootResume(camId){
+  const st = camSt(camId);
+  if(st.status !== "paused") return;
+  st.status = "running"; st.startTs = Date.now();
+  logEvent(camId, "resume", "Fortgesetzt");
+  saveShoot();
+}
+function shootStop(camId){
+  const st = camSt(camId);
+  if(st.status === "idle") return;
+  if(st.status === "running" && st.startTs) st.accumMs += Date.now() - st.startTs;
+  st.startTs = null; st.status = "stopped";
+  st.dayTotalMs = (st.dayTotalMs || 0) + st.accumMs;
+  logEvent(camId, "stop", "Gestoppt · Laufzeit " + fmtClock(st.accumMs));
+  saveShoot();
+}
+function shootCardSwap(camId){
+  const st = camSt(camId);
+  const running = st.status === "running";
+  const totalMs = st.accumMs + (running && st.startTs ? Date.now() - st.startTs : 0);
+  st.cardBaseMs = totalMs; st.cardIndex = (st.cardIndex || 1) + 1;
+  st.warned75 = false; st.warned90 = false;
+  logEvent(camId, "card_swap", "Kartenwechsel → Karte " + st.cardIndex);
+  saveShoot();
+}
+function shootNote(camId, text){ if(!text) return; logEvent(camId, "note", text); saveShoot(); }
+
+/* ---------- Schwellen-Warnungen (75 % / 90 %) ---------- */
+function checkThresholds(cam, st, L){
+  if(L.fillPct >= 90 && !st.warned90){
+    st.warned90 = true; st.warned75 = true;
+    const msg = cam.id + " · " + cam.name + ": Karte " + (st.cardIndex||1) + " zu 90 % voll!";
+    logEvent(cam.id, "warn90", "⚠ 90 % — Karte " + (st.cardIndex||1) + " fast voll");
+    showWarnBanner(msg, "crit"); notify("H.E.A.T. — 90 % Kartenfüllung", msg);
+    saveShoot(); paintEventsOnly();
+  } else if(L.fillPct >= 75 && !st.warned75){
+    st.warned75 = true;
+    const msg = cam.id + " · " + cam.name + ": Karte " + (st.cardIndex||1) + " zu 75 % voll";
+    logEvent(cam.id, "warn75", "⚠ 75 % — Karte " + (st.cardIndex||1));
+    showWarnBanner(msg, "warn"); notify("H.E.A.T. — 75 % Kartenfüllung", msg);
+    saveShoot(); paintEventsOnly();
+  }
+}
+
+/* ---------- Render: Drehmodus ---------- */
+function renderDreh(){
+  if(!Shoot.state) return `<div class="empty-state"><p>Lade …</p></div>`;
+  const daySel = DAYS.map(d =>
+    `<button class="seg-tab ${Shoot.day===d.key?'active':''}" data-shootday="${d.key}"><span class="seg-d">${d.label}</span></button>`
+  ).join("");
+  const planDay = Plan.week.days[Shoot.day] || { cams:{} };
+  const cams = [...State.cameras].sort((a,b)=>{
+    const pa = ((planDay.cams||{})[a.id] && planDay.cams[a.id].on) ? 0 : 1;
+    const pb = ((planDay.cams||{})[b.id] && planDay.cams[b.id].on) ? 0 : 1;
+    return pa - pb;
+  });
+  const grid = cams.length
+    ? cams.map(cam => shootCardHTML(cam, planDay)).join("")
+    : `<p class="assume-hint">Keine Kameras vorhanden.</p>`;
+  return `
+    <div class="seg-tabs">${daySel}</div>
+    <div id="dreh-grid" class="dreh-grid">${grid}</div>
+    <div class="section-label">Ereignis-Log</div>
+    <div id="events-log">${renderEvents()}</div>
+  `;
+}
+function shootCardHTML(cam, planDay){
+  const st = camStRead(cam.id);
+  const L  = camLive(cam, st);
+  const pEntry = (planDay.cams || {})[cam.id];
+  const planned = !!(pEntry && pEntry.on);
+  const plannedGB = planned ? camDayData(cam, pEntry).gb : 0;
+  const note = planned && pEntry.note ? pEntry.note : "";
+  const pct = Math.min(100, L.fillPct);
+  return `
+  <div class="dreh-card status-${st.status} ${planned?'planned':''}" data-shootcam="${esc(cam.id)}">
+    <div class="dc-top"><span class="cam-id">${esc(cam.id)}</span>${statusBadge(st.status)}</div>
+    <div class="dc-name">${esc(cam.name)}</div>
+    <div class="dc-clock mono" id="clk-${esc(cam.id)}">${fmtClock(L.totalMs)}</div>
+    <div class="fill-bar"><div class="fill-bar-inner ${fillClass(L.fillPct)}" id="fill-${esc(cam.id)}" style="width:${pct}%"></div></div>
+    <div class="fill-meta"><span class="mono" id="pct-${esc(cam.id)}">${Math.round(L.fillPct)}%</span><span>Karte ${st.cardIndex||1}</span></div>
+    ${ planned ? `<div class="dc-plan">${note?`<span class="dc-note">📌 ${esc(note)}</span>`:''}<span class="dc-planned mono">geplant ${fmtGB(plannedGB)}</span></div>` : '' }
+  </div>`;
+}
+function statusBadge(status){
+  const map = { idle:["Bereit","sb-idle"], running:["● REC","sb-rec"], paused:["Pause","sb-pause"], stopped:["Gestoppt","sb-stopped"] };
+  const [t,c] = map[status] || map.idle;
+  return `<span class="status-badge ${c}">${t}</span>`;
+}
+function renderEvents(){
+  if(!Shoot.state.events || !Shoot.state.events.length) return `<p class="assume-hint">Noch keine Ereignisse heute.</p>`;
+  const ev = [...Shoot.state.events].sort((a,b)=> b.ts - a.ts);   // neueste zuerst
+  return `<div class="ev-list">` + ev.map(e => `
+    <div class="ev-row ev-${esc(e.type)}">
+      <span class="ev-time mono">${fmtTime(e.ts)}</span>
+      <span class="ev-cam mono">${esc(e.camId || '—')}</span>
+      <span class="ev-text">${esc(e.text)}</span>
+    </div>`).join("") + `</div>`;
+}
+
+/* ---------- Repaint & Live-Tick ---------- */
+function paintDreh(){ if(State.currentView === "dreh") $("#view-container").innerHTML = renderDreh(); }
+function paintEventsOnly(){ const el = document.getElementById("events-log"); if(el) el.innerHTML = renderEvents(); }
+function updateShootLive(){
+  if(!Shoot.state) return;
+  State.cameras.forEach(cam => {
+    const st = camStRead(cam.id);
+    const L  = camLive(cam, st);
+    setText("clk-" + cam.id, fmtClock(L.totalMs));
+    const bar = document.getElementById("fill-" + cam.id);
+    if(bar){ bar.style.width = Math.min(100, L.fillPct) + "%"; bar.className = "fill-bar-inner " + fillClass(L.fillPct); }
+    setText("pct-" + cam.id, Math.round(L.fillPct) + "%");
+    if(st.status === "running") checkThresholds(cam, st, L);
+  });
+  // Shoot-Sheet live mitziehen
+  if(_sheetMode === "shoot" && _shootCam){
+    const cam = State.cameras.find(c => c.id === _shootCam);
+    if(cam){
+      const st = camStRead(_shootCam), L = camLive(cam, st);
+      setText("ss-clk", fmtClock(L.totalMs));
+      const f = document.getElementById("ss-fill-inner");
+      if(f){ f.style.width = Math.min(100, L.fillPct) + "%"; f.className = "fill-bar-inner " + fillClass(L.fillPct); }
+      setText("ss-pct", Math.round(L.fillPct) + "% · " + fmtGB(L.cardGB) + " / " + fmtGB(L.usableGB));
+    }
+  }
+}
+
+/* ---------- Tag wechseln ---------- */
+async function switchShootDay(dayKey){
+  await loadShoot(dayKey);
+  Realtime.subscribe();
+  paintDreh();
+}
+
+/* ---------- Shoot-Sheet (Aktionen) ---------- */
+function openShootSheet(camId){
+  _sheetMode = "shoot"; _shootCam = camId;
+  const cam = State.cameras.find(c => c.id === camId); if(!cam) return;
+  $("#sheet-title").textContent = cam.id + " · " + cam.name;
+  $("#sheet-cancel").style.visibility = "hidden";
+  $("#sheet-save").textContent = "Fertig";
+  renderShootSheet();
+  openSheet();
+}
+function renderShootSheet(){
+  if(_sheetMode !== "shoot" || !_shootCam) return;
+  const cam = State.cameras.find(c => c.id === _shootCam); if(!cam) return;
+  const st = camStRead(_shootCam), L = camLive(cam, st);
+  const planDay = Plan.week.days[Shoot.day] || { cams:{} };
+  const pEntry  = (planDay.cams || {})[_shootCam];
+  const planNote = pEntry && pEntry.on && pEntry.note ? pEntry.note : "";
+  let actions;
+  if(st.status === "idle")        actions = `<button class="btn btn-primary" data-shootaction="start">▶ Aufnahme starten</button>`;
+  else if(st.status === "running") actions =
+      `<button class="btn btn-ghost" data-shootaction="pause">⏸ Pause</button>
+       <button class="btn btn-ghost" data-shootaction="card">⇄ Kartenwechsel</button>
+       <button class="btn btn-danger-solid" data-shootaction="stop">⏹ Stopp</button>`;
+  else if(st.status === "paused")  actions =
+      `<button class="btn btn-primary" data-shootaction="resume">▶ Weiter</button>
+       <button class="btn btn-ghost" data-shootaction="card">⇄ Kartenwechsel</button>
+       <button class="btn btn-danger-solid" data-shootaction="stop">⏹ Stopp</button>`;
+  else                            actions = `<button class="btn btn-primary" data-shootaction="start">▶ Neu starten</button>`;
+  const pct = Math.min(100, L.fillPct);
+  $("#sheet-body").innerHTML = `
+    <div class="ss-status">${statusBadge(st.status)} <span class="ss-card">Karte ${st.cardIndex||1}</span></div>
+    <div class="ss-clock mono" id="ss-clk">${fmtClock(L.totalMs)}</div>
+    <div class="fill-bar ss-fill"><div class="fill-bar-inner ${fillClass(L.fillPct)}" id="ss-fill-inner" style="width:${pct}%"></div></div>
+    <div class="ss-fillmeta" id="ss-pct">${Math.round(L.fillPct)}% · ${fmtGB(L.cardGB)} / ${fmtGB(L.usableGB)}</div>
+    ${ planNote ? `<div class="ss-plannote">📌 ${esc(planNote)}</div>` : '' }
+    <div class="ss-actions">${actions}</div>
+    <div class="ss-note">
+      <input type="text" id="shoot-note-input" placeholder="Ereignis-Notiz …">
+      <button class="btn btn-ghost btn-sm" data-shootaction="note">Notiz</button>
+    </div>
+  `;
+}
+
+/* ---------- Tick + Realtime Lifecycle ---------- */
+function enterDreh(){
+  requestNotifyPermission();
+  Realtime.subscribe();
+  updateShootLive();
+  if(!Shoot.tick) Shoot.tick = setInterval(updateShootLive, 1000);
+}
+function leaveDreh(){
+  if(Shoot.tick){ clearInterval(Shoot.tick); Shoot.tick = null; }
+  Realtime.unsubscribe();
+}
+
+/* ---------- Browser-Notifications ---------- */
+function requestNotifyPermission(){
+  try { if("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch(e){}
+}
+function notify(title, body){
+  try { if("Notification" in window && Notification.permission === "granted") new Notification(title, { body }); } catch(e){}
+}
+let _bannerTimer;
+function showWarnBanner(text, level){
+  const b = document.getElementById("warn-banner"); if(!b) return;
+  b.textContent = text;
+  b.className = "warn-banner show " + (level === "crit" ? "crit" : "warn");
+  clearTimeout(_bannerTimer);
+  _bannerTimer = setTimeout(()=> b.classList.remove("show"), 6000);
+}
+
+/* ---------- Supabase Realtime (shoot_days) ---------- */
+const Realtime = {
+  channel: null,
+  subscribe(){
+    this.unsubscribe();
+    if(!Store.cloud()) return;
+    try {
+      this.channel = sb.channel("heat_shoot_" + Shoot.day)
+        .on("postgres_changes",
+            { event:"*", schema:"public", table:KV_TABLE, filter:"collection=eq.shoot_days" },
+            (payload)=>{ const row = payload.new || payload.old || {}; if(row.key === Shoot.day) onRemoteShoot(); })
+        .subscribe();
+    } catch(e){ console.warn("[Realtime] subscribe fehlgeschlagen:", e && e.message); }
+  },
+  unsubscribe(){
+    try { if(this.channel && sb) sb.removeChannel(this.channel); } catch(e){}
+    this.channel = null;
+  }
+};
+let _remoteTimer;
+function onRemoteShoot(){
+  clearTimeout(_remoteTimer);
+  _remoteTimer = setTimeout(async ()=>{ await loadShoot(Shoot.day); paintDreh(); }, 150);
+}
+
+/* ============================================================
+   Event-Delegation
+   ============================================================ */
+function bindGlobalEvents(){
+  // Bottom Nav
+  $$(".nav-item").forEach(btn=>{
+    btn.addEventListener("click", ()=> setView(btn.dataset.view));
+  });
+
+  // Sheet Controls
+  $("#sheet-cancel").addEventListener("click", closeSheet);
+  $("#sheet-backdrop").addEventListener("click", closeSheet);
+  $("#sheet-save").addEventListener("click", ()=>{ if(_sheetMode === "camera") saveCameraForm(); else closeSheet(); });
+
+  // Shoot-Sheet: Aktionen
+  $("#sheet-body").addEventListener("click", (e)=>{
+    const b = e.target.closest("[data-shootaction]"); if(!b) return;
+    const a = b.dataset.shootaction, cam = _shootCam; if(!cam) return;
+    if(a === "start")  shootStart(cam);
+    else if(a === "pause")  shootPause(cam);
+    else if(a === "resume") shootResume(cam);
+    else if(a === "stop"){ if(!confirm("Aufnahme von " + cam + " stoppen?")) return; shootStop(cam); }
+    else if(a === "card")   shootCardSwap(cam);
+    else if(a === "note"){
+      const inp = document.getElementById("shoot-note-input");
+      const v = inp ? inp.value.trim() : "";
+      if(!v){ toast("Notiz ist leer"); return; }
+      shootNote(cam, v);
+    }
+    paintDreh(); renderShootSheet();
+  });
+
+  // Delegierte Klicks im View-Container
+  $("#view-container").addEventListener("click", (e)=>{
+    // Dreh: Kamera-Card → Sheet
+    const sCard = e.target.closest("[data-shootcam]");
+    if(sCard){ openShootSheet(sCard.dataset.shootcam); return; }
+    // Dreh: Tag wechseln
+    const sDay = e.target.closest("[data-shootday]");
+    if(sDay){ switchShootDay(sDay.dataset.shootday); return; }
+
+    // Bericht: Tag wechseln
+    const rDay = e.target.closest("[data-reportday]");
+    if(rDay){ switchReportDay(rDay.dataset.reportday); return; }
+
+    // Kameras
+    const editBtn = e.target.closest("[data-edit]");
+    if(editBtn){ openCameraSheet(editBtn.dataset.edit); return; }
+    if(e.target.id === "add-cam-btn-2"){ openCameraSheet(null); return; }
+
+    // Plan: Tag-Tab
+    const tab = e.target.closest("[data-day]");
+    if(tab){ Plan.activeDay = tab.dataset.day; Plan.compare = false; paintPlan(); return; }
+
+    // Plan: Aktionen
+    const act = e.target.closest("[data-action]");
+    if(act){
+      const a = act.dataset.action;
+      if(a === "save-scn") saveScenario();
+      else if(a === "compare-scn"){ Plan.compare = true; paintPlan(); }
+      else if(a === "compare-back"){ Plan.compare = false; paintPlan(); }
+      else if(a === "export-pdf") exportPDF();
+      return;
+    }
+    const loadBtn = e.target.closest("[data-load-scn]");
+    if(loadBtn){ loadScenario(loadBtn.dataset.loadScn); return; }
+    const delBtn = e.target.closest("[data-del-scn]");
+    if(delBtn){ deleteScenario(delBtn.dataset.delScn); return; }
+  });
+
+  // Delegierte Eingaben (Stunden, Notiz, Annahmen)
+  $("#view-container").addEventListener("input", (e)=>{
+    const t = e.target;
+    if(t.dataset.hours   !== undefined){ onHoursInput(t.dataset.hours, t.value); return; }
+    if(t.dataset.camnote !== undefined){ onCamNoteInput(t.dataset.camnote, t.value); return; }
+    if(t.dataset.note    !== undefined){ onNoteInput(t.value); return; }
+    if(t.dataset.setting !== undefined){ onSettingInput(t.dataset.setting, t.value); return; }
+  });
+
+  // Delegierte Toggles (Kamera an/aus pro Tag)
+  $("#view-container").addEventListener("change", (e)=>{
+    const t = e.target;
+    if(t.dataset.toggle !== undefined){ onToggle(t.dataset.toggle, t.checked); return; }
+  });
+}
+
+/* ============================================================
+   Phase 4 — Bericht (On-Screen-Übersicht + PDF-Export)
+   ============================================================ */
+const Report = { day:null, shoot:null };
+
+async function loadReport(dayKey){
+  Report.day = dayKey;
+  // Wenn der Berichtstag der aktive Drehtag ist, die Live-Daten nehmen,
+  // sonst aus dem Store laden.
+  if(Shoot.state && Shoot.day === dayKey){
+    Report.shoot = Shoot.state;
+  } else {
+    let s = await Store.get("shoot_days", dayKey);
+    if(!s || typeof s !== "object") s = { cams:{}, events:[] };
+    if(!s.cams) s.cams = {};
+    if(!Array.isArray(s.events)) s.events = [];
+    Report.shoot = s;
+  }
+}
+async function switchReportDay(dayKey){ await loadReport(dayKey); paintBericht(); }
+function paintBericht(){ if(State.currentView === "bericht") $("#view-container").innerHTML = renderBericht(); }
+
+/* Gesamte heute aufgenommene Laufzeit (ms) — aus startTs/accumMs/dayTotalMs */
+function reportTotalMs(st){
+  if(!st) return 0;
+  if(st.status === "running") return (st.dayTotalMs||0) + (st.accumMs||0) + (st.startTs ? Date.now()-st.startTs : 0);
+  if(st.status === "paused")  return (st.dayTotalMs||0) + (st.accumMs||0);
+  return (st.dayTotalMs||0);   // stopped / idle
+}
+const pdfData = (gb) => gb > 0 ? fmtGB(gb) : "–";
+function statusLabel(status){
+  return ({ idle:"Bereit", running:"REC", paused:"Pause", stopped:"Fertig" })[status] || "Bereit";
+}
+
+/* Zeilen für die Tages-Übersicht (geplant ∪ aktiv) */
+function reportRows(){
+  const planDay = Plan.week.days[Report.day] || { cams:{} };
+  const out = [];
+  State.cameras.forEach(cam => {
+    const pEntry = (planDay.cams || {})[cam.id];
+    const planned = !!(pEntry && pEntry.on);
+    const st = Report.shoot.cams[cam.id];
+    const runtimeMs = reportTotalMs(st);
+    const actualGB  = (parseFloat(cam.bitrate)||0) * (runtimeMs/1000) / 1000;
+    const cards     = st ? (st.cardIndex||1) : 0;
+    const status    = st ? st.status : "idle";
+    const active    = runtimeMs > 0 || (st && st.status !== "idle") || cards > 1;
+    if(planned || active){
+      out.push({
+        cam, planned, status, cards, runtimeMs, actualGB,
+        plannedGB: planned ? camDayData(cam, pEntry).gb : 0,
+        note: planned && pEntry.note ? pEntry.note : ""
+      });
+    }
+  });
+  return out;
+}
+
+/* ---------- On-Screen Bericht ---------- */
+function renderBericht(){
+  if(!Report.shoot) return `<div class="empty-state"><p>Lade …</p></div>`;
+  const meta = DAYS.find(d => d.key === Report.day);
+  const daySel = DAYS.map(d =>
+    `<button class="seg-tab ${Report.day===d.key?'active':''}" data-reportday="${d.key}"><span class="seg-d">${d.label}</span></button>`
+  ).join("");
+
+  const rows = reportRows();
+  const totPlanned = rows.reduce((s,r)=> s + r.plannedGB, 0);
+  const totActual  = rows.reduce((s,r)=> s + r.actualGB, 0);
+  const evCount    = Report.shoot.events.length;
+
+  const tbody = rows.length ? rows.map(r => `
+    <tr>
+      <td class="wk-day">${esc(r.cam.id)}</td>
+      <td>${esc(r.cam.name)}${r.note?`<br><span class="rep-note">📌 ${esc(r.note)}</span>`:''}</td>
+      <td class="mono">${r.planned ? fmtGB(r.plannedGB) : '–'}</td>
+      <td class="mono">${r.runtimeMs ? fmtClock(r.runtimeMs) : '–'}</td>
+      <td class="mono">${r.actualGB ? fmtGB(r.actualGB) : '–'}</td>
+      <td>${statusBadge(r.status)}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="6" style="color:var(--text-3);padding:14px 10px;">Keine Kameras geplant oder aktiv.</td></tr>`;
+
+  const idx = DAYS.findIndex(d => d.key === Report.day);
+  const next = (idx >= 0 && idx < DAYS.length-1) ? DAYS[idx+1] : null;
+
+  return `
+    <div class="seg-tabs">${daySel}</div>
+
+    <div class="card card-pad">
+      <div class="section-label" style="margin:0 0 12px;">Tagesbericht · ${esc(meta.full)}</div>
+      <div class="rep-stats">
+        <div><span class="rep-v mono">${fmtTB(totActual)}</span><span class="rep-k">aufgenommen</span></div>
+        <div><span class="rep-v mono">${fmtTB(totPlanned)}</span><span class="rep-k">geplant</span></div>
+        <div><span class="rep-v mono">${evCount}</span><span class="rep-k">Ereignisse</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="overflow-x:auto;">
+      <table class="wk-table">
+        <thead><tr><th>ID</th><th>Kamera</th><th>Geplant</th><th>Laufzeit</th><th>Daten</th><th>Status</th></tr></thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>
+
+    <div class="card card-pad">
+      <div class="section-label" style="margin:0 0 8px;">Vorschau · ${ next ? esc(next.full) : "Drehende" }</div>
+      ${ next ? nextPreviewHTML(next.key) : `<p class="assume-hint" style="margin:0;">Letzter Drehtag der Woche.</p>` }
+    </div>
+
+    <button class="btn btn-primary" data-action="export-pdf" style="margin-top:4px;">📄 Tagesbericht als PDF exportieren</button>
+  `;
+}
+
+function nextPreviewHTML(dayKey){
+  const planDay = Plan.week.days[dayKey] || { cams:{} };
+  const cams = State.cameras.filter(cam => { const e=(planDay.cams||{})[cam.id]; return e && e.on; });
+  if(!cams.length) return `<p class="assume-hint" style="margin:0;">Keine Planung für diesen Tag.</p>`;
+  const rows = cams.map(cam => {
+    const e = planDay.cams[cam.id];
+    const gb = camDayData(cam, e).gb;
+    return `<tr>
+      <td class="wk-day">${esc(cam.id)}</td>
+      <td>${esc(cam.name)}${e.note?`<br><span class="rep-note">📌 ${esc(e.note)}</span>`:''}</td>
+      <td class="mono">${esc(e.h||0)} h</td>
+      <td class="mono">${fmtGB(gb)}</td>
+    </tr>`;
+  }).join("");
+  return `
+    <table class="wk-table">
+      <thead><tr><th>ID</th><th>Kamera / Einsatz</th><th>Std</th><th>Daten</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="mono" style="text-align:right;padding:9px 10px 0;font-weight:700;">Σ ${fmtTB(dayTotals(dayKey).gb)}</div>`;
+}
+
+/* ---------- PDF-Generierung (jsPDF) ---------- */
+function pdfHeader(doc, subtitle){
+  const W = doc.internal.pageSize.getWidth();
+  doc.setFillColor(232,83,10); doc.rect(0, 0, W, 6, "F");           // Accent-Band
+  doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(232,83,10);
+  doc.text("H.E.A.T.", 40, 42);
+  const hw = doc.getTextWidth("H.E.A.T.");
+  doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(110,110,110);
+  doc.text("— Kamera-Management", 40 + hw + 8, 42);
+  doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(17,17,17);
+  doc.text(subtitle, 40, 66);
+  doc.setDrawColor(229,229,229); doc.line(40, 80, W-40, 80);
+  return 100;
+}
+function pdfFooters(doc){
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const n = doc.internal.getNumberOfPages();
+  const stamp = "erstellt " + new Date().toLocaleString("de-DE");
+  for(let i=1;i<=n;i++){
+    doc.setPage(i);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(170,170,170);
+    doc.text("H.E.A.T. Camera Manager · " + stamp, 40, H-26);
+    doc.text("Seite " + i + " / " + n, W-40, H-26, { align:"right" });
+  }
+}
+function exportPDF(){
+  if(!(window.jspdf && window.jspdf.jsPDF)){ toast("PDF-Bibliothek nicht geladen"); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"a4" });
+  const M = 40, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const meta = DAYS.find(d => d.key === Report.day);
+  const dateStr = new Date().toLocaleDateString("de-DE", { weekday:"long", day:"numeric", month:"long", year:"numeric" });
+
+  /* ---- Seite 1: Übersicht ---- */
+  let y = pdfHeader(doc, "Tagesbericht — " + meta.full);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(120,120,120);
+  doc.text(dateStr, M, y); y += 18;
+
+  const rows = reportRows();
+  const totPlanned = rows.reduce((s,r)=> s + r.plannedGB, 0);
+  const totActual  = rows.reduce((s,r)=> s + r.actualGB, 0);
+
+  const cols = [
+    { x:M,      w:28  }, // ID
+    { x:M+28,   w:96  }, // Kamera
+    { x:M+124,  w:58  }, // Geplant
+    { x:M+182,  w:128 }, // Einsatz
+    { x:M+310,  w:58  }, // Laufzeit
+    { x:M+368,  w:52  }, // Daten
+    { x:M+420,  w:42  }, // Karten
+    { x:M+462,  w:53  }, // Status
+  ];
+  const heads = ["ID","KAMERA","GEPLANT","EINSATZ","LAUFZEIT","DATEN","KARTEN","STATUS"];
+  doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(150,150,150);
+  heads.forEach((h,i)=> doc.text(h, cols[i].x, y));
+  y += 4; doc.setDrawColor(225,225,225); doc.line(M, y, W-M, y); y += 13;
+
+  doc.setFontSize(9);
+  if(!rows.length){
+    doc.setTextColor(150,150,150); doc.text("Keine Kameras geplant oder aktiv.", M, y); y += 16;
+  }
+  rows.forEach(r => {
+    const noteLines = doc.splitTextToSize(r.note || "—", cols[3].w - 4);
+    const rowH = Math.max(14, noteLines.length * 10.5);
+    doc.setFont("helvetica","bold"); doc.setTextColor(17,17,17); doc.text(r.cam.id, cols[0].x, y);
+    doc.setFont("helvetica","normal");
+    doc.text(doc.splitTextToSize(r.cam.name, cols[1].w - 4), cols[1].x, y);
+    doc.text(r.planned ? pdfData(r.plannedGB) : "–", cols[2].x, y);
+    doc.setTextColor(95,95,95); doc.text(noteLines, cols[3].x, y); doc.setTextColor(17,17,17);
+    doc.text(r.runtimeMs ? fmtClock(r.runtimeMs) : "–", cols[4].x, y);
+    doc.text(pdfData(r.actualGB), cols[5].x, y);
+    doc.text(r.cards ? String(r.cards) : "–", cols[6].x, y);
+    doc.text(statusLabel(r.status), cols[7].x, y);
+    y += rowH + 7;
+    doc.setDrawColor(238,238,238); doc.line(M, y-5, W-M, y-5);
+  });
+  y += 6;
+  doc.setFont("helvetica","bold"); doc.setFontSize(10); doc.setTextColor(17,17,17);
+  doc.text("Geplant gesamt:  " + pdfData(totPlanned), M, y);
+  doc.text("Aufgenommen:  " + pdfData(totActual), M + 230, y);
+
+  /* ---- Seite 2: Ereignis-Log ---- */
+  doc.addPage(); y = pdfHeader(doc, "Ereignis-Log — " + meta.full);
+  const ev = [...Report.shoot.events].sort((a,b)=> a.ts - b.ts);   // chronologisch
+  doc.setFontSize(9);
+  if(!ev.length){ doc.setTextColor(150,150,150); doc.text("Keine Ereignisse erfasst.", M, y); }
+  ev.forEach(e => {
+    if(y > H - 60){ doc.addPage(); y = pdfHeader(doc, "Ereignis-Log (Forts.)"); doc.setFontSize(9); }
+    doc.setFont("helvetica","normal"); doc.setTextColor(120,120,120); doc.text(fmtTime(e.ts), M, y);
+    doc.setFont("helvetica","bold"); doc.setTextColor(17,17,17); doc.text(e.camId || "—", M+62, y);
+    const warn = (e.type === "warn75" || e.type === "warn90");
+    doc.setFont("helvetica", warn ? "bold" : "normal");
+    doc.setTextColor(warn ? 215 : 45, warn ? 38 : 45, warn ? 61 : 45);
+    doc.text(doc.splitTextToSize(e.text, W - M - (M+100)), M+100, y);
+    y += 16;
+  });
+
+  /* ---- Seite 3: Vorschau nächster Tag ---- */
+  const idx = DAYS.findIndex(d => d.key === Report.day);
+  const next = (idx >= 0 && idx < DAYS.length-1) ? DAYS[idx+1] : null;
+  doc.addPage(); y = pdfHeader(doc, "Vorschau — " + (next ? next.full : "Drehende"));
+  if(!next){
+    doc.setFontSize(10); doc.setTextColor(150,150,150);
+    doc.text("Letzter Drehtag der Woche — keine Vorschau.", M, y);
+  } else {
+    const planDay = Plan.week.days[next.key] || { cams:{} };
+    const cams = State.cameras.filter(cam => { const e=(planDay.cams||{})[cam.id]; return e && e.on; });
+    if(!cams.length){
+      doc.setFontSize(10); doc.setTextColor(150,150,150);
+      doc.text("Keine Planung für diesen Tag.", M, y);
+    } else {
+      const nh = ["ID","KAMERA","STD","DATEN","EINSATZ"];
+      const nx = [M, M+30, M+150, M+185, M+250];
+      doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(150,150,150);
+      nh.forEach((h,i)=> doc.text(h, nx[i], y));
+      y += 4; doc.setDrawColor(225,225,225); doc.line(M, y, W-M, y); y += 13;
+      doc.setFontSize(9); let tot = 0;
+      cams.forEach(cam => {
+        const e = planDay.cams[cam.id]; const gb = camDayData(cam, e).gb; tot += gb;
+        const noteLines = doc.splitTextToSize(e.note || "—", W - M - (M+250));
+        const rowH = Math.max(14, noteLines.length * 10.5);
+        doc.setFont("helvetica","bold"); doc.setTextColor(17,17,17); doc.text(cam.id, nx[0], y);
+        doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(cam.name, 112), nx[1], y);
+        doc.text(String(e.h || 0), nx[2], y);
+        doc.text(pdfData(gb), nx[3], y);
+        doc.setTextColor(95,95,95); doc.text(noteLines, nx[4], y); doc.setTextColor(17,17,17);
+        y += rowH + 7; doc.setDrawColor(238,238,238); doc.line(M, y-5, W-M, y-5);
+      });
+      y += 6; doc.setFont("helvetica","bold"); doc.setFontSize(11);
+      doc.text("Σ geplant:  " + pdfData(tot), M, y);
+    }
+  }
+
+  pdfFooters(doc);
+
+  /* ---- Ausgabe: Blob-URL (iPhone-kompatibel) ---- */
+  try {
+    const blob = doc.output("blob");
+    const url  = URL.createObjectURL(blob);
+    const win  = window.open(url, "_blank");
+    if(!win){
+      const a = document.createElement("a");
+      a.href = url; a.download = "HEAT_Tagesbericht_" + Report.day + ".pdf";
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    setTimeout(()=> URL.revokeObjectURL(url), 60000);
+    toast("PDF erstellt");
+  } catch(e){
+    console.warn("PDF-Ausgabe fehlgeschlagen:", e);
+    toast("PDF-Export fehlgeschlagen");
+  }
+}
+
+/* ============================================================
+   App-Start
+   ============================================================ */
+async function enterApp(){
+  $("#auth-screen").style.display = "none";
+  $("#app").classList.add("active");
+
+  await loadCameras();
+  await loadPlan();
+  await loadShoot(defaultShootDay());
+  await loadReport(defaultShootDay());
+  setView(State.currentView);
+  SyncStatus.render();
+}
+
+async function init(){
+  // Sync-Indikator im Header vorbereiten (wird in enterApp sichtbar)
+  const titleWrap = document.querySelector(".app-header-inner");
+  if(titleWrap && !document.getElementById("sync-dot")){
+    const dot = document.createElement("span");
+    dot.id = "sync-dot";
+    dot.className = "sync-dot";
+    dot.textContent = Store.cloud() ? "Cloud" : "Lokal";
+    // rechts neben die Header-Aktion hängen
+    $("#header-action").before(dot);
+  }
+
+  Auth.init();
+  bindGlobalEvents();
+  SyncStatus.render();
+
+  if(await Auth.check()){
+    await enterApp();
+  } else {
+    $("#auth-screen").style.display = "flex";
+    setTimeout(()=> $("#auth-input").focus(), 200);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
