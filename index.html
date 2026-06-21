@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="H.E.A.T.">
 <meta name="theme-color" content="#F7F7F5">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>H.E.A.T. Camera Manager</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -480,6 +483,12 @@ main#view-container{
 .fill-bar-inner.warn{ background:var(--warn); }
 .fill-bar-inner.crit{ background:var(--crit); }
 .fill-meta{ display:flex; justify-content:space-between; font-size:11px; color:var(--text-3); margin-top:5px; }
+.dc-eta{ font-size:11px; font-weight:600; color:var(--text-3); margin-top:6px; min-height:14px; }
+.dc-eta.eta-warn{ color:var(--warn); }
+.dc-eta.eta-crit{ color:var(--crit); }
+.ss-eta{ text-align:center; font-size:13px; font-weight:700; color:var(--text-3); margin:-8px 0 14px; min-height:16px; }
+.ss-eta.eta-warn{ color:var(--warn); }
+.ss-eta.eta-crit{ color:var(--crit); }
 .dc-plan{ margin-top:9px; padding-top:9px; border-top:1px solid var(--border-2); display:flex; flex-direction:column; gap:3px; }
 .dc-note{ font-size:11.5px; color:var(--text-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .dc-planned{ font-size:11px; color:var(--text-3); }
@@ -1597,15 +1606,26 @@ function camSt(camId){                                                          
 
 /* ---------- Live-Berechnung ---------- */
 function camLive(cam, st){
+  const rate    = parseFloat(cam.bitrate) || 0;   // MB/s
   const running = st.status === "running";
   const totalMs = (st.accumMs || 0) + (running && st.startTs ? Date.now() - st.startTs : 0);
   const cardMs  = Math.max(0, totalMs - (st.cardBaseMs || 0));
-  const cardGB  = (parseFloat(cam.bitrate) || 0) * (cardMs / 1000) / 1000;   // MB/s·s = MB → GB
+  const cardGB  = rate * (cardMs / 1000) / 1000;   // MB/s·s = MB → GB
   const usableGB= (parseFloat(cam.cardSize) || 0) * (Plan.settings.usable / 100);
   const fillPct = usableGB > 0 ? (cardGB / usableGB * 100) : 0;
-  return { running, totalMs, cardMs, cardGB, usableGB, fillPct };
+  // Zeit bis Karte voll — vorhersehbar aus Datenrate
+  const etaFullSec = (running && rate > 0 && usableGB > 0) ? Math.max(0, (usableGB - cardGB) * 1000 / rate) : null;
+  return { running, totalMs, cardMs, cardGB, usableGB, fillPct, etaFullSec };
 }
 function fillClass(pct){ return pct >= 90 ? "crit" : pct >= 75 ? "warn" : "ok"; }
+function fmtEta(sec){
+  if(sec == null) return "";
+  if(sec <= 0) return "Karte voll";
+  const m = Math.round(sec / 60);
+  if(m < 60) return "voll in ~" + m + " Min";
+  return "voll in ~" + Math.floor(m/60) + ":" + String(m % 60).padStart(2,"0") + " h";
+}
+function etaClass(sec){ if(sec == null) return ""; if(sec <= 300) return "eta-crit"; if(sec <= 900) return "eta-warn"; return ""; }
 function fmtClock(ms){
   let s = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(s/3600); s %= 3600; const m = Math.floor(s/60); s %= 60;
@@ -1669,13 +1689,13 @@ function checkThresholds(cam, st, L){
     st.warned90 = true; st.warned75 = true;
     const msg = cam.id + " · " + cam.name + ": Karte " + (st.cardIndex||1) + " zu 90 % voll!";
     logEvent(cam.id, "warn90", "⚠ 90 % — Karte " + (st.cardIndex||1) + " fast voll");
-    showWarnBanner(msg, "crit"); notify("H.E.A.T. — 90 % Kartenfüllung", msg);
+    showWarnBanner(msg, "crit"); notify("H.E.A.T. — 90 % Kartenfüllung", msg); beep(true);
     saveShoot(); paintEventsOnly();
   } else if(L.fillPct >= 75 && !st.warned75){
     st.warned75 = true;
     const msg = cam.id + " · " + cam.name + ": Karte " + (st.cardIndex||1) + " zu 75 % voll";
     logEvent(cam.id, "warn75", "⚠ 75 % — Karte " + (st.cardIndex||1));
-    showWarnBanner(msg, "warn"); notify("H.E.A.T. — 75 % Kartenfüllung", msg);
+    showWarnBanner(msg, "warn"); notify("H.E.A.T. — 75 % Kartenfüllung", msg); beep(false);
     saveShoot(); paintEventsOnly();
   }
 }
@@ -1695,7 +1715,11 @@ function renderDreh(){
   const grid = cams.length
     ? cams.map(cam => shootCardHTML(cam, planDay)).join("")
     : `<p class="assume-hint">Keine Kameras vorhanden.</p>`;
+  const pushBtn = (Push.supported() && !Push.isOn())
+    ? `<button class="btn btn-ghost btn-block" data-action="push-enable" style="margin-bottom:12px;">🔔 Push-Warnungen auf diesem Gerät aktivieren</button>`
+    : "";
   return `
+    ${pushBtn}
     <div class="seg-tabs">${daySel}</div>
     <div id="dreh-grid" class="dreh-grid">${grid}</div>
     <div class="section-label">Ereignis-Log</div>
@@ -1717,6 +1741,7 @@ function shootCardHTML(cam, planDay){
     <div class="dc-clock mono" id="clk-${esc(cam.id)}">${fmtClock(L.totalMs)}</div>
     <div class="fill-bar"><div class="fill-bar-inner ${fillClass(L.fillPct)}" id="fill-${esc(cam.id)}" style="width:${pct}%"></div></div>
     <div class="fill-meta"><span class="mono" id="pct-${esc(cam.id)}">${Math.round(L.fillPct)}%</span><span>Karte ${st.cardIndex||1}</span></div>
+    <div class="dc-eta ${st.status==='running'?etaClass(L.etaFullSec):''}" id="eta-${esc(cam.id)}">${ st.status==='running' ? fmtEta(L.etaFullSec) : '' }</div>
     ${ planned ? `<div class="dc-plan">${note?`<span class="dc-note">📌 ${esc(note)}</span>`:''}<span class="dc-planned mono">geplant ${fmtGB(plannedGB)}</span></div>` : '' }
   </div>`;
 }
@@ -1748,6 +1773,8 @@ function updateShootLive(){
     const bar = document.getElementById("fill-" + cam.id);
     if(bar){ bar.style.width = Math.min(100, L.fillPct) + "%"; bar.className = "fill-bar-inner " + fillClass(L.fillPct); }
     setText("pct-" + cam.id, Math.round(L.fillPct) + "%");
+    const eta = document.getElementById("eta-" + cam.id);
+    if(eta){ eta.textContent = st.status === "running" ? fmtEta(L.etaFullSec) : ""; eta.className = "dc-eta " + (st.status === "running" ? etaClass(L.etaFullSec) : ""); }
     if(st.status === "running") checkThresholds(cam, st, L);
   });
   // Shoot-Sheet live mitziehen
@@ -1759,6 +1786,8 @@ function updateShootLive(){
       const f = document.getElementById("ss-fill-inner");
       if(f){ f.style.width = Math.min(100, L.fillPct) + "%"; f.className = "fill-bar-inner " + fillClass(L.fillPct); }
       setText("ss-pct", Math.round(L.fillPct) + "% · " + fmtGB(L.cardGB) + " / " + fmtGB(L.usableGB));
+      const se = document.getElementById("ss-eta");
+      if(se){ se.textContent = st.status === "running" ? fmtEta(L.etaFullSec) : ""; se.className = "ss-eta " + (st.status === "running" ? etaClass(L.etaFullSec) : ""); }
     }
   }
 }
@@ -1804,6 +1833,7 @@ function renderShootSheet(){
     <div class="ss-clock mono" id="ss-clk">${fmtClock(L.totalMs)}</div>
     <div class="fill-bar ss-fill"><div class="fill-bar-inner ${fillClass(L.fillPct)}" id="ss-fill-inner" style="width:${pct}%"></div></div>
     <div class="ss-fillmeta" id="ss-pct">${Math.round(L.fillPct)}% · ${fmtGB(L.cardGB)} / ${fmtGB(L.usableGB)}</div>
+    <div class="ss-eta ${st.status==='running'?etaClass(L.etaFullSec):''}" id="ss-eta">${ st.status==='running' ? fmtEta(L.etaFullSec) : '' }</div>
     ${ planNote ? `<div class="ss-plannote">📌 ${esc(planNote)}</div>` : '' }
     <div class="ss-actions">${actions}</div>
     <div class="ss-note">
@@ -1816,6 +1846,7 @@ function renderShootSheet(){
 /* ---------- Tick + Realtime Lifecycle ---------- */
 function enterDreh(){
   requestNotifyPermission();
+  audioInit();              // Warnton freischalten (Tab-Wechsel ist die Nutzer-Geste)
   Realtime.subscribe();
   updateShootLive();
   if(!Shoot.tick) Shoot.tick = setInterval(updateShootLive, 1000);
@@ -1830,7 +1861,31 @@ function requestNotifyPermission(){
   try { if("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch(e){}
 }
 function notify(title, body){
-  try { if("Notification" in window && Notification.permission === "granted") new Notification(title, { body }); } catch(e){}
+  try { if("Notification" in window && Notification.permission === "granted")
+    new Notification(title, { body, tag:"heat-fill", requireInteraction:true }); } catch(e){}
+}
+
+/* Warnton via Web Audio (keine externe Datei) */
+let _audio = null;
+function audioInit(){
+  try { if(!_audio) _audio = new (window.AudioContext || window.webkitAudioContext)();
+        if(_audio.state === "suspended") _audio.resume(); } catch(e){}
+}
+function beep(urgent){
+  try {
+    audioInit(); if(!_audio) return;
+    const tone = (freq, start, dur) => {
+      const o = _audio.createOscillator(), g = _audio.createGain();
+      o.connect(g); g.connect(_audio.destination); o.type = "sine"; o.frequency.value = freq;
+      const t = _audio.currentTime + start;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur + 0.02);
+    };
+    if(urgent){ tone(880,0,0.18); tone(880,0.24,0.18); tone(880,0.48,0.24); }   // dringlicher Dreiklang
+    else      { tone(660,0,0.22); }
+  } catch(e){}
 }
 let _bannerTimer;
 function showWarnBanner(text, level){
@@ -1867,6 +1922,73 @@ function onRemoteShoot(){
 }
 
 /* ============================================================
+   Web Push — autonome Füllstand-Warnungen
+   ------------------------------------------------------------
+   Funktioniert auch, wenn KEIN Gerät die App offen hat:
+   Bei Start/Kartenwechsel berechnet die App die Alarm-Uhrzeiten
+   (90 % / voll) und legt sie in `card_alarms` ab. Ein Supabase-
+   Cron-Job ruft minütlich die Edge-Function `dispatch-alarms`,
+   die fällige Alarme als Push an alle angemeldeten Geräte schickt.
+   ============================================================ */
+const PUSH_VAPID_PUBLIC = "BKr3-RtevYW01VTffg7tUGRIVsj4gpIvV2TO0Wpp8Q-aNs-gGMUCMzKnmII4KeNWv83G5ewMMFG9dTRBKPz6KnI";
+
+function urlB64ToUint8(s){
+  const pad = "=".repeat((4 - s.length % 4) % 4);
+  const b = (s + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(b), arr = new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+const Push = {
+  reg: null,
+  supported(){ return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window; },
+  async registerSW(){
+    if(!("serviceWorker" in navigator)) return null;
+    try { this.reg = await navigator.serviceWorker.register("sw.js"); return this.reg; }
+    catch(e){ console.warn("[Push] SW-Registrierung fehlgeschlagen:", e && e.message); return null; }
+  },
+  isOn(){ try { return localStorage.getItem("heat_push_on") === "1" && Notification.permission === "granted"; } catch(e){ return false; } },
+  async enable(){
+    if(!this.supported()){ toast("Push wird hier nicht unterstützt"); return; }
+    if(!sb){ toast("Push braucht aktive Cloud-Verbindung"); return; }
+    const reg = this.reg || await this.registerSW();
+    if(!reg){ toast("Service Worker nicht verfügbar"); return; }
+    let perm; try { perm = await Notification.requestPermission(); } catch(e){ perm = Notification.permission; }
+    if(perm !== "granted"){ toast("Benachrichtigungen nicht erlaubt"); return; }
+    try {
+      let sub = await reg.pushManager.getSubscription();
+      if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlB64ToUint8(PUSH_VAPID_PUBLIC) });
+      const { error } = await sb.from("push_subscriptions").upsert(
+        { endpoint: sub.endpoint, subscription: sub.toJSON() }, { onConflict:"endpoint" });
+      if(error) throw error;
+      localStorage.setItem("heat_push_on", "1");
+      toast("Push aktiviert ✓"); paintDreh();
+    } catch(e){ console.warn("[Push] subscribe:", e && e.message); toast("Push-Anmeldung fehlgeschlagen"); }
+  }
+};
+
+/* Alarm-Zeiten einer Kamera server-seitig aktualisieren (für Push ohne offene App) */
+async function syncAlarms(camId){
+  if(!sb) return;
+  const cam = State.cameras.find(c => c.id === camId); if(!cam) return;
+  try { await sb.from("card_alarms").delete().eq("day", Shoot.day).eq("cam_id", camId); } catch(e){}
+  const st = Shoot.state.cams[camId];
+  if(!st || st.status !== "running") return;
+  const L = camLive(cam, st);
+  const rate = parseFloat(cam.bitrate) || 0;
+  if(rate <= 0 || L.usableGB <= 0) return;
+  const now = Date.now(), card = st.cardIndex || 1, who = cam.id + " · " + cam.name;
+  const at = (pct) => { const sec = ((pct/100) * L.usableGB - L.cardGB) * 1000 / rate; return sec > 0 ? new Date(now + sec*1000).toISOString() : null; };
+  const rows = [
+    { level:"warn90", at: at(90),  body: who + ": Karte " + card + " zu 90 % voll" },
+    { level:"full",   at: at(100), body: who + ": Karte " + card + " VOLL — Wechsel!" },
+  ].filter(r => r.at)
+   .map(r => ({ day:Shoot.day, cam_id:camId, cam_name:who, card_index:card, level:r.level, fire_at:r.at, body:r.body }));
+  if(rows.length){ try { await sb.from("card_alarms").insert(rows); } catch(e){ console.warn("[Push] Alarm-Insert:", e && e.message); } }
+}
+
+/* ============================================================
    Event-Delegation
    ============================================================ */
 function bindGlobalEvents(){
@@ -1895,6 +2017,7 @@ function bindGlobalEvents(){
       if(!v){ toast("Notiz ist leer"); return; }
       shootNote(cam, v);
     }
+    if(a !== "note") syncAlarms(cam);     // Push-Alarme an neuen Zustand anpassen
     paintDreh(); renderShootSheet();
   });
 
@@ -1928,6 +2051,7 @@ function bindGlobalEvents(){
       else if(a === "compare-scn"){ Plan.compare = true; paintPlan(); }
       else if(a === "compare-back"){ Plan.compare = false; paintPlan(); }
       else if(a === "export-pdf") exportPDF();
+      else if(a === "push-enable") Push.enable();
       return;
     }
     const loadBtn = e.target.closest("[data-load-scn]");
@@ -2253,6 +2377,7 @@ async function enterApp(){
   await loadReport(defaultShootDay());
   setView(State.currentView);
   SyncStatus.render();
+  Push.registerSW();      // Service Worker früh registrieren (für Push)
 }
 
 async function init(){
