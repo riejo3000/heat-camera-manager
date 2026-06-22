@@ -472,6 +472,28 @@ main#view-container{
 .cmp-head{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
 .cmp-title{ font-size:16px; font-weight:700; }
 
+/* Sicherung / Festplatten */
+.bk-eff{ padding:12px 13px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); font-size:15px; font-weight:700; color:var(--accent); }
+.drv-list{ display:flex; flex-direction:column; gap:7px; }
+.drv-row{ display:flex; align-items:center; gap:8px; }
+.drv-name{ flex:1; min-width:0; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font-size:13px; }
+.drv-name:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,83,10,.1); }
+.drv-size{ display:flex; align-items:center; gap:3px; flex:none; }
+.drv-size input{ width:48px; padding:8px 6px; text-align:right; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); }
+.drv-size input:focus{ outline:none; border-color:var(--accent); }
+.drv-size .u{ font-size:11px; color:var(--text-3); }
+.drv-set{ display:flex; gap:3px; flex:none; }
+.drv-ab{ width:28px; height:32px; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--text-3); font-weight:700; font-size:12px; }
+.drv-ab.on{ background:var(--text); color:#fff; border-color:var(--text); }
+.drv-del{ flex:none; width:28px; height:32px; border:none; background:none; color:var(--text-3); font-size:14px; }
+.dp-set{ margin-bottom:16px; }
+.dp-set:last-child{ margin-bottom:0; }
+.dp-set-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-weight:700; font-size:14px; }
+.dp-drive{ margin-bottom:9px; }
+.dp-drv-top{ display:flex; align-items:center; justify-content:space-between; font-size:12px; margin-bottom:4px; }
+.dp-drv-name{ font-weight:600; }
+.dp-days{ font-size:10.5px; color:var(--text-3); margin-top:3px; }
+
 /* ============================================================
    Phase 3 — Drehmodus
    ============================================================ */
@@ -1401,7 +1423,7 @@ const DAYS = [
   { key:"do", label:"Do", full:"Donnerstag" },
   { key:"fr", label:"Fr", full:"Freitag" },
 ];
-const DEFAULT_SETTINGS = { usable: 93, backupSpeed: 150, night: 12, fps: 25 };
+const DEFAULT_SETTINGS = { usable: 93, backupSpeed: 100, night: 12, fps: 25, backupStations: 3 };
 const MAX_SCENARIOS = 5;
 const DEFAULT_HOURS  = 8;
 
@@ -1409,6 +1431,7 @@ const Plan = {
   week: null,        // { days: { mo:{cams:{id:{on,h}}, note}, … } }
   settings: null,    // { usable, backupSpeed, night }
   scenarios: [],     // [{ id, name, ts, week, gb, changes }]  max 5
+  drives: [],        // [{ id, name, sizeTB, set:"A"|"B" }]
   activeDay: "mo",   // "mo".."fr" | "sum"
   compare: false,
 };
@@ -1428,9 +1451,15 @@ async function loadPlan(){
 
   const s = await Store.get("settings", "all");
   Plan.settings = s ? { ...DEFAULT_SETTINGS, ...s } : { ...DEFAULT_SETTINGS };
+  // Migration: altes Einzel-Backup-Modell → Stationen-Modell
+  if(s && s.backupStations === undefined){ Plan.settings.backupStations = 3; Plan.settings.backupSpeed = 100; }
 
   const sc = await Store.get("scenarios", "all");
   Plan.scenarios = Array.isArray(sc) ? sc : [];
+
+  const dr = await Store.get("drives", "all");
+  if(Array.isArray(dr) && dr.length){ Plan.drives = dr; }
+  else { Plan.drives = defaultDrives(); await saveDrives(); }
 }
 
 let _weekSaveTimer;
@@ -1467,7 +1496,8 @@ function dayTotalsFor(week, dayKey){
     const r = camDayData(cam, (day.cams || {})[cam.id]);
     if(r.on){ active++; gb += r.gb; changes += r.changes; cards += r.cards; }
   });
-  const backupSec = Plan.settings.backupSpeed > 0 ? (gb * 1000) / Plan.settings.backupSpeed : 0;
+  const effSpeed = (Plan.settings.backupStations || 1) * (Plan.settings.backupSpeed || 0);
+  const backupSec = effSpeed > 0 ? (gb * 1000) / effSpeed : 0;
   const ready = (backupSec / 3600) <= Plan.settings.night;
   return { gb, changes, cards, active, backupSec, ready };
 }
@@ -1626,6 +1656,7 @@ function renderWeek(){
       </table>
     </div>
     ${renderAssumptions()}
+    <div id="backup-section">${renderBackupInner()}</div>
     ${renderScenarios()}
   `;
 }
@@ -1650,13 +1681,6 @@ function renderAssumptions(){
         </div>
       </div>
       <div class="field" style="margin:0;">
-        <label>Backup-Speed</label>
-        <div class="suffix-wrap">
-          <input type="number" class="mono" data-setting="backupSpeed" min="1" step="10" value="${esc(s.backupSpeed)}">
-          <span class="suffix">MB/s</span>
-        </div>
-      </div>
-      <div class="field" style="margin:0;">
         <label>Nacht-Fenster</label>
         <div class="suffix-wrap">
           <input type="number" class="mono" data-setting="night" min="1" max="24" step="1" value="${esc(s.night)}">
@@ -1667,6 +1691,139 @@ function renderAssumptions(){
     <p class="assume-hint">„1 TB"-Karten haben real ~93 % nutzbar — beeinflusst Kartenwechsel & Sicherungszeit.</p>
   </div>`;
 }
+
+/* ============================================================
+   Sicherung — Stationen + Festplatten + Aufteilungs-Plan
+   ============================================================ */
+function defaultDrives(){
+  const d = [];
+  for(let i=1;i<=8;i++) d.push({ id:"d2_"+i, name:"LaCie 2 TB #"+i, sizeTB:2, set:(i<=4?"A":"B") });
+  for(let i=1;i<=4;i++) d.push({ id:"d5_"+i, name:"LaCie 5 TB #"+i, sizeTB:5, set:(i<=2?"A":"B") });
+  return d;   // Set A = 4×2 + 2×5 = 18 TB · Set B = 4×2 + 2×5 = 18 TB
+}
+function saveDrives(){ return Store.set("drives", "all", Plan.drives); }
+let _drvSaveTimer;
+function saveDrivesDebounced(){ clearTimeout(_drvSaveTimer); _drvSaveTimer = setTimeout(saveDrives, 400); }
+
+function effectiveBackupSpeed(){ return (Plan.settings.backupStations || 1) * (Plan.settings.backupSpeed || 0); }
+function driveUsableGB(d){ return (parseFloat(d.sizeTB) || 0) * 1000 * (Plan.settings.usable / 100); }
+function setDrives(set){ return Plan.drives.filter(d => d.set === set); }
+function setCapacityGB(set){ return setDrives(set).reduce((s, d) => s + driveUsableGB(d), 0); }
+function weekDayLoads(){
+  return DAYS.map(d => ({ label: d.label, gb: dayTotals(d.key).gb })).filter(x => x.gb > 0);
+}
+/* Greedy: Drehtage der Reihe nach auf die Platten eines Satzes packen (Tag darf Platte überspannen). */
+function packSet(set){
+  const drives = setDrives(set).map(d => ({ name: d.name, sizeGB: driveUsableGB(d), items: [], used: 0 }));
+  const days = weekDayLoads();
+  let di = 0, overflow = 0;
+  for(const day of days){
+    let rem = day.gb;
+    while(rem > 0.01){
+      if(di >= drives.length){ overflow += rem; break; }
+      const drv = drives[di], free = drv.sizeGB - drv.used;
+      if(free <= 0.01){ di++; continue; }
+      const put = Math.min(rem, free);
+      const last = drv.items[drv.items.length - 1];
+      if(last && last.label === day.label) last.gb += put; else drv.items.push({ label: day.label, gb: put });
+      drv.used += put; rem -= put;
+      if(rem > 0.01) di++;
+    }
+  }
+  return { drives, overflow };
+}
+
+function renderDrivesCard(){
+  const tot = Plan.drives.reduce((s, d) => s + (parseFloat(d.sizeTB) || 0), 0);
+  const row = d => `
+    <div class="drv-row">
+      <input class="drv-name" data-drvname="${esc(d.id)}" value="${esc(d.name)}">
+      <div class="drv-size"><input type="number" class="mono" data-drvsize="${esc(d.id)}" min="0" step="1" value="${esc(d.sizeTB)}"><span class="u">TB</span></div>
+      <div class="drv-set">
+        <button class="drv-ab ${d.set==='A'?'on':''}" data-drvset="${esc(d.id)}|A">A</button>
+        <button class="drv-ab ${d.set==='B'?'on':''}" data-drvset="${esc(d.id)}|B">B</button>
+      </div>
+      <button class="drv-del" data-drvdel="${esc(d.id)}" aria-label="Löschen">✕</button>
+    </div>`;
+  return `
+  <div class="card card-pad">
+    <div class="section-label" style="margin:0 0 4px;">Festplatten <span class="hde-sub mono">${Plan.drives.length} · ${tot} TB</span></div>
+    <p class="assume-hint" style="margin:0 0 12px;">Kopie <b>A</b> &amp; <b>B</b> = zwei getrennte Sätze. Gespiegelt liegt jede Datei auf beiden.</p>
+    <div class="drv-list">${Plan.drives.map(row).join("")}</div>
+    <button class="btn btn-ghost btn-block btn-sm" data-action="add-drive" style="margin-top:10px;">+ Platte</button>
+  </div>`;
+}
+
+function backupPlanBody(){
+  const wk = weekTotals(), capA = setCapacityGB("A"), capB = setCapacityGB("B");
+  const setBlock = (set, cap) => {
+    const packed = packSet(set);
+    const fits = packed.overflow <= 0.01;
+    const bars = packed.drives.map(drv => {
+      const pct = drv.sizeGB > 0 ? Math.min(100, drv.used / drv.sizeGB * 100) : 0;
+      const labels = drv.items.map(it => it.label).join(", ") || "frei";
+      return `<div class="dp-drive">
+        <div class="dp-drv-top"><span class="dp-drv-name">${esc(drv.name)}</span><span class="mono">${fmtTB(drv.used)} / ${fmtTB(drv.sizeGB)}</span></div>
+        <div class="fill-bar"><div class="fill-bar-inner ${pct>=90?'crit':pct>=75?'warn':'ok'}" style="width:${pct}%"></div></div>
+        <div class="dp-days">${esc(labels)}</div>
+      </div>`;
+    }).join("") || `<p class="assume-hint" style="margin:0;">Keine Platten in Satz ${set}.</p>`;
+    return `
+      <div class="dp-set">
+        <div class="dp-set-head">
+          <span>Kopie ${set} <span class="hde-sub mono">${fmtTB(cap)}</span></span>
+          <span class="rb ${fits?'rb-ok':'rb-warn'}" style="font-size:13px;">${fits ? '✓ passt' : '⚠ ' + fmtTB(packed.overflow) + ' zu viel'}</span>
+        </div>
+        ${bars}
+      </div>`;
+  };
+  return `
+    <p class="assume-hint" style="margin:0 0 14px;">Woche <b>${fmtTB(wk.gb)}</b> · gespiegelt <b>${fmtTB(wk.gb*2)}</b> Bedarf · <b>${fmtTB(capA+capB)}</b> verfügbar.</p>
+    ${setBlock('A', capA)}
+    ${setBlock('B', capB)}`;
+}
+
+function renderBackupInner(){
+  const eff = effectiveBackupSpeed();
+  return `
+  <div class="card card-pad">
+    <div class="section-label" style="margin:0 0 12px;">Sicherungs-Setup</div>
+    <div class="assume-grid">
+      <div class="field" style="margin:0;">
+        <label>Stationen</label>
+        <div class="suffix-wrap"><input type="number" class="mono" data-setting="backupStations" min="1" max="12" step="1" value="${esc(Plan.settings.backupStations)}"><span class="suffix">×</span></div>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>MB/s pro Station</label>
+        <div class="suffix-wrap"><input type="number" class="mono" data-setting="backupSpeed" min="1" step="10" value="${esc(Plan.settings.backupSpeed)}"><span class="suffix">MB/s</span></div>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>Effektiv</label>
+        <div class="bk-eff mono" id="bk-eff">${eff} MB/s</div>
+      </div>
+    </div>
+    <p class="assume-hint">SilverStack: 1 Karte → 2 Platten gespiegelt (kostet Speicher, nicht Zeit). ${Plan.settings.backupStations} Stationen parallel.</p>
+  </div>
+  ${renderDrivesCard()}
+  <div class="card card-pad">
+    <div class="section-label" style="margin:0 0 4px;">Sicherungs-Plan</div>
+    <div id="backup-plan-body">${backupPlanBody()}</div>
+  </div>`;
+}
+
+function paintBackup(){ const el = document.getElementById("backup-section"); if(el) el.innerHTML = renderBackupInner(); }
+function updateBackupNumbers(){
+  setText("bk-eff", effectiveBackupSpeed() + " MB/s");
+  const body = document.getElementById("backup-plan-body");
+  if(body) body.innerHTML = backupPlanBody();
+}
+
+/* ---------- Festplatten-Handler ---------- */
+function onDriveName(id, val){ const d = Plan.drives.find(x => x.id === id); if(d){ d.name = val; saveDrivesDebounced(); updateBackupNumbers(); } }
+function onDriveSize(id, val){ const d = Plan.drives.find(x => x.id === id); if(d){ d.sizeTB = parseFloat(val); saveDrivesDebounced(); updateBackupNumbers(); } }
+function onDriveSet(id, set){ const d = Plan.drives.find(x => x.id === id); if(d){ d.set = set; saveDrives(); paintBackup(); } }
+function onDriveDel(id){ Plan.drives = Plan.drives.filter(x => x.id !== id); saveDrives(); paintBackup(); }
+function onAddDrive(){ Plan.drives.push({ id:"drv_"+Date.now(), name:"Platte "+(Plan.drives.length+1), sizeTB:2, set:"A" }); saveDrives(); paintBackup(); }
 
 function renderScenarios(){
   const list = Plan.scenarios.map(sc => `
@@ -1794,6 +1951,7 @@ function onSettingInput(key, val){
   Plan.settings[key] = isNaN(n) ? DEFAULT_SETTINGS[key] : n;
   saveSettings();
   if(key === "fps"){ if(recomputeAllCameras()) saveCameras(); }   // ARRI/Venice-Raten an neue fps anpassen
+  if(key === "backupStations" || key === "backupSpeed" || key === "usable"){ updateBackupNumbers(); }
   updateWeekLive();
 }
 
@@ -2314,8 +2472,13 @@ function bindGlobalEvents(){
       else if(a === "compare-back"){ Plan.compare = false; paintPlan(); }
       else if(a === "export-pdf") exportPDF();
       else if(a === "push-enable") Push.enable();
+      else if(a === "add-drive") onAddDrive();
       return;
     }
+    const dset = e.target.closest("[data-drvset]");
+    if(dset){ const p = dset.dataset.drvset.split("|"); onDriveSet(p[0], p[1]); return; }
+    const ddel = e.target.closest("[data-drvdel]");
+    if(ddel){ onDriveDel(ddel.dataset.drvdel); return; }
     const loadBtn = e.target.closest("[data-load-scn]");
     if(loadBtn){ loadScenario(loadBtn.dataset.loadScn); return; }
     const delBtn = e.target.closest("[data-del-scn]");
@@ -2329,6 +2492,8 @@ function bindGlobalEvents(){
     if(t.dataset.camnote !== undefined){ onCamNoteInput(t.dataset.camnote, t.value); return; }
     if(t.dataset.note    !== undefined){ onNoteInput(t.value); return; }
     if(t.dataset.setting !== undefined){ onSettingInput(t.dataset.setting, t.value); return; }
+    if(t.dataset.drvname !== undefined){ onDriveName(t.dataset.drvname, t.value); return; }
+    if(t.dataset.drvsize !== undefined){ onDriveSize(t.dataset.drvsize, t.value); return; }
   });
 
   // Delegierte Toggles (Kamera an/aus pro Tag)
