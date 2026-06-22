@@ -318,6 +318,20 @@ main#view-container{
 
 .sheet-actions{ margin-top:8px; display:flex; flex-direction:column; gap:9px; }
 
+/* Format-Picker */
+.rate-preview{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin:2px 0 4px; padding:11px 14px;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm);
+  font-size:13px; color:var(--text-2);
+}
+.rate-preview b{ font-size:17px; font-weight:700; color:var(--accent); }
+.hde-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-bottom:15px; font-size:13px; font-weight:600; color:var(--text);
+}
+.hde-sub{ color:var(--text-3); font-weight:400; }
+
 /* ---------- Toast ---------- */
 #toast{
   position:fixed; left:50%; bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px);
@@ -662,22 +676,25 @@ const AUTH_KEY      = "heat_auth_token";       // bleibt rein in localStorage
 const STORE_PREFIX  = "heat:";                 // localStorage-Cache/Fallback Präfix
 const KV_TABLE      = "kv_store";              // Supabase Key-Value-Tabelle
 
+/* Offizielle Kamera-Format-Datenbank (ARRI/Sony/DJI, verifiziert) */
+const CAMERA_FORMATS = {"meta":{"generated":"2026-06-20","sources":{"arri":"FDRC v2.6.3 (2026-06-10)","venice2":"Sony VENICE 2 brochure (official data-rate table p.13)","fx3":"Sony ILME-FX3 official spec","ronin4d":"DJI / FDTimes official spec (326 MB/s @48fps)"}},"cameras":{"ALEXA 35":{"sensor":"Super 35 · 4.6K ALEV 4","rateModel":"perFrame","hdeMultiplier":0.5,"codecs":{"ARRIRAW (HDE)":[{"res":"4.6K (4608 x 3164)","px":"4608x3164","bytesPerFrame":23219804,"hde":0.5},{"res":"4.6K (4608 x 2592)","px":"4608x2592","bytesPerFrame":19032748,"hde":0.5},{"res":"4K (4096 x 2304)","px":"4096x2304","bytesPerFrame":15057612,"hde":0.5},{"res":"UHD (3840 x 2160)","px":"3840x2160","bytesPerFrame":13243186,"hde":0.5},{"res":"4K (4096 x 2048)","px":"4096x2048","bytesPerFrame":13394542,"hde":0.5},{"res":"3.3K (3328 x 2790)","px":"3328x2790","bytesPerFrame":14814618,"hde":0.5},{"res":"3K (3072 x 3072)","px":"3072x3072","bytesPerFrame":15057612,"hde":0.5}],"ProRes 422 HQ":[{"res":"4.6K (4608 x 3164)","px":"4608x3164","bytesPerFrame":7377493,"hde":null},{"res":"4K (4096 x 2304)","px":"4096x2304","bytesPerFrame":4160652,"hde":null},{"res":"UHD (3840 x 2160)","px":"3840x2160","bytesPerFrame":4260437,"hde":null},{"res":"2K (2048 x 1152)","px":"2048x1152","bytesPerFrame":1315413,"hde":null},{"res":"HD (1920 x 1080)","px":"1920x1080","bytesPerFrame":1172053,"hde":null},{"res":"4K (4096 x 2048)","px":"4096x2048","bytesPerFrame":3708635,"hde":null},{"res":"3.3K (3328 x 2790)","px":"3328x2790","bytesPerFrame":4751957,"hde":null},{"res":"3.8K 2.39:1 Ana. 2x","px":"3840x1608","bytesPerFrame":3207765,"hde":null},{"res":"3K (3072 x 3072)","px":"3072x3072","bytesPerFrame":4160652,"hde":null},{"res":"3.8K 2:1 Ana 2x","px":"3840x1920","bytesPerFrame":3268685,"hde":null}],"ProRes 4444":[{"res":"4.6K (4608 x 3164)","px":"4608x3164","bytesPerFrame":10986069,"hde":null},{"res":"4K (4096 x 2304)","px":"4096x2304","bytesPerFrame":6201079,"hde":null},{"res":"UHD (3840 x 2160)","px":"3840x2160","bytesPerFrame":6312533,"hde":null},{"res":"2K (2048 x 1152)","px":"2048x1152","bytesPerFrame":1897045,"hde":null},{"res":"HD (1920 x 1080)","px":"1920x1080","bytesPerFrame":1688149,"hde":null},{"res":"4K (4096 x 2048)","px":"4096x2048","bytesPerFrame":5520903,"hde":null},{"res":"3.3K (3328 x 2790)","px":"3328x2790","bytesPerFrame":7049813,"hde":null},{"res":"3.8K 2.39:1 Ana. 2x","px":"3840x1608","bytesPerFrame":4735573,"hde":null},{"res":"3K (3072 x 3072)","px":"3072x3072","bytesPerFrame":6201079,"hde":null},{"res":"3.8K 2:1 Ana 2x","px":"3840x1920","bytesPerFrame":4860852,"hde":null}],"ProRes 4444 XQ":[{"res":"4.6K (4608 x 3164)","px":"4608x3164","bytesPerFrame":16417365,"hde":null},{"res":"4K (4096 x 2304)","px":"4096x2304","bytesPerFrame":9257057,"hde":null},{"res":"UHD (3840 x 2160)","px":"3840x2160","bytesPerFrame":9400917,"hde":null},{"res":"2K (2048 x 1152)","px":"2048x1152","bytesPerFrame":2777685,"hde":null},{"res":"HD (1920 x 1080)","px":"1920x1080","bytesPerFrame":2458197,"hde":null},{"res":"4K (4096 x 2048)","px":"4096x2048","bytesPerFrame":8237328,"hde":null},{"res":"3.3K (3328 x 2790)","px":"3328x2790","bytesPerFrame":10506837,"hde":null},{"res":"3.8K 2.39:1 Ana. 2x","px":"3840x1608","bytesPerFrame":7037525,"hde":null},{"res":"3K (3072 x 3072)","px":"3072x3072","bytesPerFrame":9257057,"hde":null},{"res":"3.8K 2:1 Ana 2x","px":"3840x1920","bytesPerFrame":7248795,"hde":null}]}},"VENICE 2 (6K)":{"sensor":"Full-Frame · 6K (24.8MP)","rateModel":"perFrame","codecs":{"X-OCN XT":[{"res":"6K 3:2 (6048x4032)","bytesPerFrame":13703125,"mbps24":2631},{"res":"6K 1.85:1","bytesPerFrame":11161458,"mbps24":2143},{"res":"6K 17:9","bytesPerFrame":10890625,"mbps24":2091},{"res":"6K 2.39:1","bytesPerFrame":8671875,"mbps24":1665},{"res":"5.7K 16:9","bytesPerFrame":10890625,"mbps24":2091},{"res":"4K 6:5","bytesPerFrame":7942708,"mbps24":1525},{"res":"4K 4:3","bytesPerFrame":6989583,"mbps24":1342},{"res":"4K 17:9","bytesPerFrame":5026042,"mbps24":965},{"res":"4K 2.39:1","bytesPerFrame":4010417,"mbps24":770},{"res":"3.8K 16:9","bytesPerFrame":5026042,"mbps24":965}],"X-OCN ST":[{"res":"6K 3:2 (6048x4032)","bytesPerFrame":9375000,"mbps24":1800},{"res":"6K 1.85:1","bytesPerFrame":7640625,"mbps24":1467},{"res":"6K 17:9","bytesPerFrame":7453125,"mbps24":1431},{"res":"6K 2.39:1","bytesPerFrame":5937500,"mbps24":1140},{"res":"5.7K 16:9","bytesPerFrame":7453125,"mbps24":1431},{"res":"4K 6:5","bytesPerFrame":5437500,"mbps24":1044},{"res":"4K 4:3","bytesPerFrame":4786458,"mbps24":919},{"res":"4K 17:9","bytesPerFrame":3442708,"mbps24":661},{"res":"4K 2.39:1","bytesPerFrame":2744792,"mbps24":527},{"res":"3.8K 16:9","bytesPerFrame":3442708,"mbps24":661}],"X-OCN LT":[{"res":"6K 3:2 (6048x4032)","bytesPerFrame":5526042,"mbps24":1061},{"res":"6K 1.85:1","bytesPerFrame":4500000,"mbps24":864},{"res":"6K 17:9","bytesPerFrame":4390625,"mbps24":843},{"res":"6K 2.39:1","bytesPerFrame":3494792,"mbps24":671},{"res":"5.7K 16:9","bytesPerFrame":4390625,"mbps24":843},{"res":"4K 6:5","bytesPerFrame":3203125,"mbps24":615},{"res":"4K 4:3","bytesPerFrame":2817708,"mbps24":541},{"res":"4K 17:9","bytesPerFrame":2026042,"mbps24":389},{"res":"4K 2.39:1","bytesPerFrame":1614583,"mbps24":310},{"res":"3.8K 16:9","bytesPerFrame":2026042,"mbps24":389}],"ProRes 4444":[{"res":"4K 17:9","bytesPerFrame":5890625,"mbps24":1131},{"res":"QFHD 3.8K","bytesPerFrame":5526042,"mbps24":1061}],"ProRes 422 HQ":[{"res":"4K 17:9","bytesPerFrame":3927083,"mbps24":754},{"res":"QFHD 3.8K","bytesPerFrame":3682292,"mbps24":707}]}},"VENICE 2 (8K)":{"sensor":"Full-Frame · 8.6K (50MP)","rateModel":"perFrame","codecs":{"X-OCN XT":[{"res":"8.6K 3:2 (8640x5760)","bytesPerFrame":27838542,"mbps24":5345},{"res":"8.2K 17:9","bytesPerFrame":20109375,"mbps24":3861},{"res":"7.6K 16:9","bytesPerFrame":20109375,"mbps24":3861},{"res":"5.8K 6:5","bytesPerFrame":15833333,"mbps24":3040},{"res":"5.8K 17:9","bytesPerFrame":10005208,"mbps24":1921},{"res":"5.4K 16:9","bytesPerFrame":10005208,"mbps24":1921}],"X-OCN ST":[{"res":"8.6K 3:2 (8640x5760)","bytesPerFrame":19052083,"mbps24":3658},{"res":"8.2K 17:9","bytesPerFrame":13760417,"mbps24":2642},{"res":"7.6K 16:9","bytesPerFrame":13760417,"mbps24":2642},{"res":"5.8K 6:5","bytesPerFrame":10833333,"mbps24":2080},{"res":"5.8K 17:9","bytesPerFrame":6848958,"mbps24":1315},{"res":"5.4K 16:9","bytesPerFrame":6848958,"mbps24":1315}],"X-OCN LT":[{"res":"8.6K 3:2 (8640x5760)","bytesPerFrame":11223958,"mbps24":2155},{"res":"8.2K 17:9","bytesPerFrame":8104167,"mbps24":1556},{"res":"7.6K 16:9","bytesPerFrame":8104167,"mbps24":1556},{"res":"5.8K 6:5","bytesPerFrame":6380208,"mbps24":1225},{"res":"5.8K 17:9","bytesPerFrame":4031250,"mbps24":774},{"res":"5.4K 16:9","bytesPerFrame":4031250,"mbps24":774}],"ProRes 4444":[{"res":"4K 17:9","bytesPerFrame":5890625,"mbps24":1131},{"res":"QFHD","bytesPerFrame":5526042,"mbps24":1061}],"ProRes 422 HQ":[{"res":"4K 17:9","bytesPerFrame":3927083,"mbps24":754},{"res":"QFHD","bytesPerFrame":3682292,"mbps24":707}]}},"Sony FX3":{"sensor":"Full-Frame","rateModel":"fixed","note":"Offizielle Sony ILME-FX3 Spec (verifiziert 2026-06-20). Bitraten sind feste Aufnahmemodi.","modes":[{"codec":"XAVC S-I (4:2:2 10bit)","res":"DCI 4K 4096x2160","fps":23.98,"mbps":240},{"codec":"XAVC S-I (4:2:2 10bit)","res":"DCI 4K 4096x2160","fps":24,"mbps":240},{"codec":"XAVC S-I (4:2:2 10bit)","res":"DCI 4K 4096x2160","fps":25,"mbps":250},{"codec":"XAVC S-I (4:2:2 10bit)","res":"DCI 4K 4096x2160","fps":29.97,"mbps":300},{"codec":"XAVC S-I (4:2:2 10bit)","res":"DCI 4K 4096x2160","fps":50,"mbps":500},{"codec":"XAVC S-I (4:2:2 10bit)","res":"DCI 4K 4096x2160","fps":59.94,"mbps":600},{"codec":"XAVC S (4:2:2 10bit)","res":"4K UHD 3840x2160","fps":23.98,"mbps":100},{"codec":"XAVC S (4:2:2 10bit)","res":"4K UHD 3840x2160","fps":25,"mbps":140},{"codec":"XAVC S (4:2:2 10bit)","res":"4K UHD 3840x2160","fps":29.97,"mbps":140},{"codec":"XAVC S (4:2:2 10bit)","res":"4K UHD 3840x2160","fps":50,"mbps":200},{"codec":"XAVC S (4:2:2 10bit)","res":"4K UHD 3840x2160","fps":59.94,"mbps":200},{"codec":"XAVC HS (HEVC 4:2:2 10bit)","res":"4K UHD 3840x2160","fps":23.98,"mbps":100},{"codec":"XAVC HS (HEVC 4:2:2 10bit)","res":"4K UHD 3840x2160","fps":50,"mbps":200},{"codec":"XAVC HS (HEVC 4:2:2 10bit)","res":"4K UHD 3840x2160","fps":59.94,"mbps":200},{"codec":"XAVC HS (HEVC 4:2:2 10bit)","res":"4K UHD 3840x2160","fps":100,"mbps":280},{"codec":"XAVC HS (HEVC 4:2:2 10bit)","res":"4K UHD 3840x2160","fps":120,"mbps":280},{"codec":"XAVC S HD (4:2:2 10bit)","res":"HD 1920x1080","fps":23.98,"mbps":50},{"codec":"XAVC S HD (4:2:0 8bit)","res":"HD 1920x1080","fps":25,"mbps":50},{"codec":"XAVC S HD (4:2:0 8bit)","res":"HD 1920x1080","fps":50,"mbps":25}]},"Ronin 4D":{"sensor":"Full-Frame · 6K X9","rateModel":"fixed","note":"ProRes 422 HQ & H.264 = 4K DCI 4096x2160 (offiziell, DJI/Screenshot). ProRes RAW = 6K 6008x3168 (DJI-Spec 326 MB/s @48fps; andere fps linear skaliert).","modes":[{"codec":"ProRes 422 HQ","res":"4K DCI 4096x2160 (17:9)","fps":24,"mbps":720},{"codec":"ProRes 422 HQ","res":"4K DCI 4096x2160 (17:9)","fps":25,"mbps":752},{"codec":"ProRes 422 HQ","res":"4K DCI 4096x2160 (17:9)","fps":29.97,"mbps":896},{"codec":"ProRes 422 HQ","res":"4K DCI 4096x2160 (17:9)","fps":48,"mbps":1400},{"codec":"ProRes 422 HQ","res":"4K DCI 4096x2160 (17:9)","fps":50,"mbps":1500},{"codec":"ProRes 422 HQ","res":"4K DCI 4096x2160 (17:9)","fps":59.94,"mbps":1800},{"codec":"ProRes RAW","res":"6K 6008x3168 (17:9)","fps":24,"mbps":1304,"raw":true},{"codec":"ProRes RAW","res":"6K 6008x3168 (17:9)","fps":25,"mbps":1358,"raw":true},{"codec":"ProRes RAW","res":"6K 6008x3168 (17:9)","fps":48,"mbps":2608,"raw":true},{"codec":"H.264 (4:2:0 10bit)","res":"4K DCI 4096x2160 (17:9)","fps":24,"mbps":200},{"codec":"H.264 (4:2:0 10bit)","res":"4K DCI 4096x2160 (17:9)","fps":25,"mbps":200},{"codec":"H.264 (4:2:0 10bit)","res":"4K DCI 4096x2160 (17:9)","fps":50,"mbps":200}]},"Actioncam":{"sensor":"—","rateModel":"fixed","placeholder":true,"note":"Modell wird nachgeliefert — Bitraten sind generische H.265-4K-Platzhalter, im Picker editierbar.","modes":[{"codec":"H.265 4K (Platzhalter)","res":"4K UHD 3840x2160","fps":25,"mbps":100},{"codec":"H.265 4K (Platzhalter)","res":"4K UHD 3840x2160","fps":24,"mbps":100},{"codec":"H.265 4K (Platzhalter)","res":"4K UHD 3840x2160","fps":50,"mbps":120},{"codec":"H.265 1080p (Platzhalter)","res":"HD 1920x1080","fps":25,"mbps":60}]}}};
+
 const CARD_TYPES = ["Codex Compact Drive", "CFexpress Type B", "CFexpress Type A", "AXS", "DJI PROSSD", "microSD", "SD UHS-II", "SSD"];
 
 /* Voreingestellte Kameras (Seed) — offizielle Datenraten @25p (Recherche 2026-06-20).
    Bei Bump von CAMERAS_VERSION werden gespeicherte Kameras einmalig neu geseedet. */
-const CAMERAS_VERSION = 2;
+const CAMERAS_VERSION = 3;
 const DEFAULT_CAMERAS = [
-  { id:"A1",  name:"Alexa 35 Totale",  codec:"ARRIRAW 4.6K OG (HDE)",  bitrate:290, cardType:"Codex Compact Drive", cardSize:1000 },
-  { id:"A2",  name:"Alexa 35 Zoom",    codec:"ProRes 4444 XQ · 4K",    bitrate:231, cardType:"Codex Compact Drive", cardSize:1000 },
-  { id:"FX1", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
-  { id:"FX2", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
-  { id:"FX3", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
-  { id:"FX4", name:"Sony FX3",         codec:"XAVC S-I · DCI 4K 25p",  bitrate:31,  cardType:"CFexpress Type A", cardSize:256 },
-  { id:"V1",  name:"Venice 2 + Rialto",codec:"X-OCN LT · 6K 3:2",      bitrate:138, cardType:"AXS",                cardSize:512 },
-  { id:"R1",  name:"Ronin 4D",         codec:"ProRes RAW · 6K",        bitrate:170, cardType:"DJI PROSSD",          cardSize:1000 },
-  { id:"AC1", name:"Actioncam",        codec:"H.265 4K (Platzhalter)", bitrate:13,  cardType:"microSD",            cardSize:128 },
-  { id:"AC2", name:"Actioncam",        codec:"H.265 4K (Platzhalter)", bitrate:13,  cardType:"microSD",            cardSize:128 },
+  { id:"A1",  name:"Alexa 35 Totale",  camType:"ALEXA 35",      fmtCodec:"ARRIRAW (HDE)",         fmtRes:"4.6K (4608 x 3164)", fmtFps:null, hde:true,  codec:"ARRIRAW · 4.6K @25p · HDE", bitrate:290,   cardType:"Codex Compact Drive", cardSize:1000 },
+  { id:"A2",  name:"Alexa 35 Zoom",    camType:"ALEXA 35",      fmtCodec:"ProRes 4444 XQ",        fmtRes:"4K (4096 x 2304)",   fmtFps:null, hde:false, codec:"ProRes 4444 XQ · 4K @25p",  bitrate:231.4, cardType:"Codex Compact Drive", cardSize:1000 },
+  { id:"FX1", name:"Sony FX3",         camType:"Sony FX3",      fmtCodec:"XAVC S-I (4:2:2 10bit)", fmtRes:"DCI 4K 4096x2160",   fmtFps:25,   hde:false, codec:"XAVC S-I · DCI 4K @25p",    bitrate:31.3,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"FX2", name:"Sony FX3",         camType:"Sony FX3",      fmtCodec:"XAVC S-I (4:2:2 10bit)", fmtRes:"DCI 4K 4096x2160",   fmtFps:25,   hde:false, codec:"XAVC S-I · DCI 4K @25p",    bitrate:31.3,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"FX3", name:"Sony FX3",         camType:"Sony FX3",      fmtCodec:"XAVC S-I (4:2:2 10bit)", fmtRes:"DCI 4K 4096x2160",   fmtFps:25,   hde:false, codec:"XAVC S-I · DCI 4K @25p",    bitrate:31.3,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"FX4", name:"Sony FX3",         camType:"Sony FX3",      fmtCodec:"XAVC S-I (4:2:2 10bit)", fmtRes:"DCI 4K 4096x2160",   fmtFps:25,   hde:false, codec:"XAVC S-I · DCI 4K @25p",    bitrate:31.3,  cardType:"CFexpress Type A", cardSize:256 },
+  { id:"V1",  name:"Venice 2 + Rialto",camType:"VENICE 2 (6K)", fmtCodec:"X-OCN LT",              fmtRes:"6K 3:2 (6048x4032)", fmtFps:null, hde:false, codec:"X-OCN LT · 6K 3:2 @25p",    bitrate:138.2, cardType:"AXS",                cardSize:512 },
+  { id:"R1",  name:"Ronin 4D",         camType:"Ronin 4D",      fmtCodec:"ProRes RAW",            fmtRes:"6K 6008x3168 (17:9)",fmtFps:25,   hde:false, codec:"ProRes RAW · 6K @25p",      bitrate:169.8, cardType:"DJI PROSSD",          cardSize:1000 },
+  { id:"AC1", name:"Actioncam",        camType:"Actioncam",     fmtCodec:"H.265 4K (Platzhalter)",fmtRes:"4K UHD 3840x2160",   fmtFps:25,   hde:false, codec:"H.265 4K · @25p",           bitrate:12.5,  cardType:"microSD",            cardSize:128 },
+  { id:"AC2", name:"Actioncam",        camType:"Actioncam",     fmtCodec:"H.265 4K (Platzhalter)",fmtRes:"4K UHD 3840x2160",   fmtFps:25,   hde:false, codec:"H.265 4K · @25p",           bitrate:12.5,  cardType:"microSD",            cardSize:128 },
 ];
 
 /* ============================================================
@@ -884,8 +901,8 @@ const Auth = {
 async function loadCameras(){
   let cams = await Store.get("cameras", "all");
   const ver = await Store.get("camerasVersion", "all");
-  // Erst-Seed ODER einmaliges Re-Seed bei neuer offizieller Datenbasis
-  if(!Array.isArray(cams) || cams.length === 0 || ver !== CAMERAS_VERSION){
+  // Erst-Seed ODER Upgrade auf neuere Datenbasis (nie downgraden → kein Versions-Pingpong)
+  if(!Array.isArray(cams) || cams.length === 0 || !(typeof ver === "number" && ver >= CAMERAS_VERSION)){
     cams = DEFAULT_CAMERAS.map(c => ({...c}));
     await Store.set("cameras", "all", cams);
     await Store.set("camerasVersion", "all", CAMERAS_VERSION);
@@ -990,6 +1007,155 @@ function camCardHTML(c){
 let _editingId = null;
 let _sheetMode = "camera";   // "camera" | "shoot"
 let _shootCam  = null;       // aktive Kamera im Shoot-Sheet
+let _fmt = null;             // Editier-Zustand des Format-Pickers
+
+/* ============================================================
+   Kamera-Format-Logik (offizielle Datenraten aus CAMERA_FORMATS)
+   ============================================================ */
+const FPS_CHOICES = [23.98, 24, 25, 29.97, 30, 48, 50, 59.94];
+function fpsLabel(f){ const r = Math.round(f * 100) / 100; return r + "p"; }
+function fmtTypeKeys(){ return Object.keys(CAMERA_FORMATS.cameras); }
+function isPerFrame(type){ const c = CAMERA_FORMATS.cameras[type]; return !!(c && c.rateModel === "perFrame"); }
+function codecIsArriraw(codec){ return /ARRIRAW/i.test(codec || ""); }
+function fmtCodecs(type){
+  const c = CAMERA_FORMATS.cameras[type]; if(!c) return [];
+  return c.rateModel === "perFrame" ? Object.keys(c.codecs) : [...new Set(c.modes.map(m => m.codec))];
+}
+function fmtResolutions(type, codec){
+  const c = CAMERA_FORMATS.cameras[type]; if(!c) return [];
+  return c.rateModel === "perFrame"
+    ? (c.codecs[codec] || []).map(x => x.res)
+    : [...new Set(c.modes.filter(m => m.codec === codec).map(m => m.res))];
+}
+function fmtFpsList(type, codec, res){
+  const c = CAMERA_FORMATS.cameras[type]; if(!c || c.rateModel !== "fixed") return [];
+  return c.modes.filter(m => m.codec === codec && m.res === res).map(m => m.fps);
+}
+function computeRate(type, codec, res, fps, hde){
+  const c = CAMERA_FORMATS.cameras[type]; if(!c) return null;
+  if(c.rateModel === "perFrame"){
+    const m = (c.codecs[codec] || []).find(x => x.res === res); if(!m) return null;
+    let bpf = m.bytesPerFrame; if(hde && m.hde) bpf *= m.hde;
+    return bpf * (parseFloat(fps) || 0) / 1e6;          // MB/s
+  } else {
+    const m = c.modes.find(x => x.codec === codec && x.res === res && x.fps === fps); if(!m) return null;
+    return m.mbps / 8;                                  // MB/s
+  }
+}
+function camFps(cam){
+  if(isPerFrame(cam.camType)) return (cam.fmtFps != null) ? cam.fmtFps : ((Plan.settings && Plan.settings.fps) || 25);
+  return cam.fmtFps;   // fixed: fps steckt im Modus
+}
+function formatLabel(cam, fps){
+  const codec = (cam.fmtCodec || "").replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  const shortRes = (cam.fmtRes || "").replace(/\s*\([^)]*\)\s*/, "").trim();
+  const hdeTag = (cam.hde && codecIsArriraw(cam.fmtCodec)) ? " · HDE" : "";
+  return codec + " · " + shortRes + " @" + fpsLabel(fps) + hdeTag;
+}
+function recomputeCamera(cam){
+  if(!cam.camType || cam.camType === "Manuell" || !CAMERA_FORMATS.cameras[cam.camType]) return false;
+  const fps = camFps(cam);
+  const rate = computeRate(cam.camType, cam.fmtCodec, cam.fmtRes, fps, cam.hde);
+  if(rate == null) return false;
+  const nr = Math.round(rate * 10) / 10, nc = formatLabel(cam, fps);
+  const changed = cam.bitrate !== nr || cam.codec !== nc;
+  cam.bitrate = nr; cam.codec = nc;
+  return changed;
+}
+function recomputeAllCameras(){
+  let any = false;
+  State.cameras.forEach(c => { if(recomputeCamera(c)) any = true; });
+  return any;
+}
+
+/* ---------- Format-Picker im Bearbeiten-Sheet ---------- */
+function renderFmtArea(){
+  if(_fmt.camType === "Manuell"){
+    return `
+      <div class="field">
+        <label>Codec / Format</label>
+        <input type="text" id="f-codec" placeholder="z. B. H.265 4K" value="${esc(_fmt.codec || "")}">
+      </div>
+      <div class="field">
+        <label>Datenrate</label>
+        <div class="suffix-wrap">
+          <input type="number" id="f-bitrate" class="mono" inputmode="decimal" min="0" step="0.1"
+                 placeholder="0" value="${_fmt.bitrate != null ? esc(_fmt.bitrate) : ""}">
+          <span class="suffix">MB/s</span>
+        </div>
+      </div>`;
+  }
+  const type = _fmt.camType, perFrame = isPerFrame(type);
+  const codecSel = fmtCodecs(type).map(cd => `<option value="${esc(cd)}" ${cd===_fmt.codec?"selected":""}>${esc(cd)}</option>`).join("");
+  const resSel = fmtResolutions(type, _fmt.codec).map(r => `<option value="${esc(r)}" ${r===_fmt.res?"selected":""}>${esc(r)}</option>`).join("");
+
+  let fpsField;
+  if(perFrame){
+    const g = (Plan.settings && Plan.settings.fps) || 25;
+    fpsField = `
+      <div class="field">
+        <label>Bildrate</label>
+        <select id="f-fps">
+          <option value="">Projekt-Standard (${fpsLabel(g)})</option>
+          ${FPS_CHOICES.map(f => `<option value="${f}" ${_fmt.fps===f?"selected":""}>${fpsLabel(f)}</option>`).join("")}
+        </select>
+      </div>`;
+  } else {
+    fpsField = `
+      <div class="field">
+        <label>Bildrate</label>
+        <select id="f-fps">
+          ${fmtFpsList(type, _fmt.codec, _fmt.res).map(f => `<option value="${f}" ${_fmt.fps===f?"selected":""}>${fpsLabel(f)}</option>`).join("")}
+        </select>
+      </div>`;
+  }
+
+  const hdeField = (perFrame && codecIsArriraw(_fmt.codec)) ? `
+      <label class="hde-row">
+        <span>HDE-Kompression <span class="hde-sub">(realistisch ~½)</span></span>
+        <span class="switch"><input type="checkbox" id="f-hde" ${_fmt.hde?"checked":""}><span class="track"></span><span class="thumb"></span></span>
+      </label>` : "";
+
+  const fps = perFrame ? ((_fmt.fps != null) ? _fmt.fps : ((Plan.settings && Plan.settings.fps) || 25)) : _fmt.fps;
+  const rate = computeRate(type, _fmt.codec, _fmt.res, fps, _fmt.hde);
+  const rateStr = rate != null ? (Math.round(rate * 10) / 10) + " MB/s" : "—";
+
+  return `
+    <div class="field"><label>Codec</label><select id="f-codec-sel">${codecSel}</select></div>
+    <div class="field"><label>Auflösung</label><select id="f-res-sel">${resSel}</select></div>
+    ${fpsField}
+    ${hdeField}
+    <div class="rate-preview">Offizielle Datenrate<b id="rate-out" class="mono">${rateStr}</b></div>
+  `;
+}
+function refreshFmtArea(){
+  const area = document.getElementById("fmt-area");
+  if(area){ area.innerHTML = renderFmtArea(); bindFmtArea(); }
+}
+function bindFmtArea(){
+  if(_fmt.camType === "Manuell") return;
+  const codecSel = document.getElementById("f-codec-sel");
+  const resSel   = document.getElementById("f-res-sel");
+  const fpsSel   = document.getElementById("f-fps");
+  const hde      = document.getElementById("f-hde");
+  if(codecSel) codecSel.addEventListener("change", () => {
+    _fmt.codec = codecSel.value;
+    _fmt.res = fmtResolutions(_fmt.camType, _fmt.codec)[0];
+    if(!isPerFrame(_fmt.camType)){ const fl = fmtFpsList(_fmt.camType, _fmt.codec, _fmt.res); _fmt.fps = fl.includes(_fmt.fps) ? _fmt.fps : fl[0]; }
+    if(codecIsArriraw(_fmt.codec) && _fmt.hde == null) _fmt.hde = true;
+    refreshFmtArea();
+  });
+  if(resSel) resSel.addEventListener("change", () => {
+    _fmt.res = resSel.value;
+    if(!isPerFrame(_fmt.camType)){ const fl = fmtFpsList(_fmt.camType, _fmt.codec, _fmt.res); _fmt.fps = fl.includes(_fmt.fps) ? _fmt.fps : fl[0]; }
+    refreshFmtArea();
+  });
+  if(fpsSel) fpsSel.addEventListener("change", () => {
+    _fmt.fps = (isPerFrame(_fmt.camType) && fpsSel.value === "") ? null : parseFloat(fpsSel.value);
+    refreshFmtArea();
+  });
+  if(hde) hde.addEventListener("change", () => { _fmt.hde = hde.checked; refreshFmtArea(); });
+}
 
 function openCameraSheet(id){
   _editingId = id;
@@ -1001,9 +1167,17 @@ function openCameraSheet(id){
 
   $("#sheet-title").textContent = isNew ? "Neue Kamera" : "Kamera bearbeiten";
 
-  const opts = CARD_TYPES.map(t =>
-    `<option value="${esc(t)}" ${c && c.cardType===t ? "selected":""}>${esc(t)}</option>`
-  ).join("");
+  // Format-Editierzustand aufbauen
+  if(c && c.camType && CAMERA_FORMATS.cameras[c.camType]){
+    _fmt = { camType:c.camType, codec:c.fmtCodec, res:c.fmtRes, fps:c.fmtFps, hde:!!c.hde };
+  } else {
+    _fmt = { camType:"Manuell", codec:(c ? c.codec : ""), bitrate:(c ? c.bitrate : null) };
+  }
+
+  const typeOpts = ['<option value="Manuell" ' + (_fmt.camType==="Manuell"?"selected":"") + '>Manuell (frei)</option>']
+    .concat(fmtTypeKeys().map(t => `<option value="${esc(t)}" ${t===_fmt.camType?"selected":""}>${esc(t)}</option>`)).join("");
+
+  const cardOpts = CARD_TYPES.map(t => `<option value="${esc(t)}" ${c && c.cardType===t ? "selected":""}>${esc(t)}</option>`).join("");
   const customCard = c && !CARD_TYPES.includes(c.cardType);
 
   $("#sheet-body").innerHTML = `
@@ -1020,33 +1194,25 @@ function openCameraSheet(id){
     </div>
 
     <div class="field">
-      <label>Codec / Format</label>
-      <input type="text" id="f-codec" placeholder="z. B. ARRIRAW LF" value="${esc(c ? c.codec : "")}">
+      <label>Kamera-Typ</label>
+      <select id="f-camtype">${typeOpts}</select>
     </div>
 
-    <div class="field-row">
-      <div class="field">
-        <label>Datenrate</label>
-        <div class="suffix-wrap">
-          <input type="number" id="f-bitrate" class="mono" inputmode="decimal" min="0" step="1"
-                 placeholder="0" value="${c ? esc(c.bitrate) : ""}">
-          <span class="suffix">MB/s</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Kapazität</label>
-        <div class="suffix-wrap">
-          <input type="number" id="f-size" class="mono" inputmode="decimal" min="0" step="1"
-                 placeholder="0" value="${c ? esc(c.cardSize) : ""}">
-          <span class="suffix">GB</span>
-        </div>
+    <div id="fmt-area">${renderFmtArea()}</div>
+
+    <div class="field">
+      <label>Kapazität pro Karte</label>
+      <div class="suffix-wrap">
+        <input type="number" id="f-size" class="mono" inputmode="decimal" min="0" step="1"
+               placeholder="0" value="${c ? esc(c.cardSize) : ""}">
+        <span class="suffix">GB</span>
       </div>
     </div>
 
     <div class="field">
       <label>Speichermedium</label>
       <select id="f-cardtype">
-        ${opts}
+        ${cardOpts}
         <option value="__custom" ${customCard?"selected":""}>Andere…</option>
       </select>
       <input type="text" id="f-cardtype-custom" placeholder="Eigener Medientyp"
@@ -1058,6 +1224,21 @@ function openCameraSheet(id){
       ${isNew ? "" : `<button class="btn btn-danger btn-block" id="f-delete">Kamera löschen</button>`}
     </div>
   `;
+
+  // Kamera-Typ wechseln → Picker neu aufbauen
+  $("#f-camtype").addEventListener("change", (e) => {
+    const t = e.target.value;
+    if(t === "Manuell"){
+      _fmt = { camType:"Manuell", codec:(_fmt.codec || ""), bitrate:_fmt.bitrate };
+    } else {
+      const codec = fmtCodecs(t)[0];
+      const res = fmtResolutions(t, codec)[0];
+      const fps = isPerFrame(t) ? null : fmtFpsList(t, codec, res)[0];
+      _fmt = { camType:t, codec, res, fps, hde: codecIsArriraw(codec) };
+    }
+    refreshFmtArea();
+  });
+  bindFmtArea();
 
   // Custom-Medium Toggle
   const sel = $("#f-cardtype"), custom = $("#f-cardtype-custom");
@@ -1077,13 +1258,23 @@ function openCameraSheet(id){
 function readCameraForm(){
   const id   = $("#f-id").value.trim().toUpperCase();
   const name = $("#f-name").value.trim();
-  const codec= $("#f-codec").value.trim();
-  const bitrate = parseFloat($("#f-bitrate").value);
-  const cardSize= parseFloat($("#f-size").value);
+  const cardSize = parseFloat($("#f-size").value);
   let cardType = $("#f-cardtype").value;
   if(cardType === "__custom") cardType = $("#f-cardtype-custom").value.trim();
+  const base = { id, name, cardSize, cardType };
 
-  return { id, name, codec, bitrate, cardSize, cardType };
+  if(_fmt.camType === "Manuell"){
+    const codec = ($("#f-codec") ? $("#f-codec").value.trim() : "") || "—";
+    const bitrate = parseFloat($("#f-bitrate") ? $("#f-bitrate").value : "");
+    return { ...base, camType:"Manuell", fmtCodec:null, fmtRes:null, fmtFps:null, hde:false, codec, bitrate };
+  }
+  // Format-basiert → Datenrate offiziell berechnen
+  const fps = isPerFrame(_fmt.camType)
+    ? ((_fmt.fps != null) ? _fmt.fps : ((Plan.settings && Plan.settings.fps) || 25))
+    : _fmt.fps;
+  const rate = computeRate(_fmt.camType, _fmt.codec, _fmt.res, fps, _fmt.hde);
+  const tmp  = { camType:_fmt.camType, fmtCodec:_fmt.codec, fmtRes:_fmt.res, fmtFps:_fmt.fps, hde:!!_fmt.hde };
+  return { ...base, ...tmp, bitrate: rate != null ? Math.round(rate * 10) / 10 : 0, codec: formatLabel(tmp, fps) };
 }
 
 async function saveCameraForm(){
@@ -1153,7 +1344,7 @@ const DAYS = [
   { key:"do", label:"Do", full:"Donnerstag" },
   { key:"fr", label:"Fr", full:"Freitag" },
 ];
-const DEFAULT_SETTINGS = { usable: 93, backupSpeed: 150, night: 12 };
+const DEFAULT_SETTINGS = { usable: 93, backupSpeed: 150, night: 12, fps: 25 };
 const MAX_SCENARIOS = 5;
 const DEFAULT_HOURS  = 8;
 
@@ -1380,6 +1571,12 @@ function renderAssumptions(){
   return `
   <div class="card card-pad">
     <div class="section-label" style="margin:0 0 12px;">Annahmen</div>
+    <div class="field" style="margin:0 0 12px;">
+      <label>Projekt-Bildrate <span class="hde-sub">(Standard für ARRI &amp; Venice)</span></label>
+      <select data-setting="fps">
+        ${FPS_CHOICES.map(f => `<option value="${f}" ${(+s.fps)===f?"selected":""}>${fpsLabel(f)}</option>`).join("")}
+      </select>
+    </div>
     <div class="assume-grid">
       <div class="field" style="margin:0;">
         <label>Nutzkapazität</label>
@@ -1532,6 +1729,7 @@ function onSettingInput(key, val){
   const n = parseFloat(val);
   Plan.settings[key] = isNaN(n) ? DEFAULT_SETTINGS[key] : n;
   saveSettings();
+  if(key === "fps"){ if(recomputeAllCameras()) saveCameras(); }   // ARRI/Venice-Raten an neue fps anpassen
   updateWeekLive();
 }
 
@@ -2072,7 +2270,8 @@ function bindGlobalEvents(){
   // Delegierte Toggles (Kamera an/aus pro Tag)
   $("#view-container").addEventListener("change", (e)=>{
     const t = e.target;
-    if(t.dataset.toggle !== undefined){ onToggle(t.dataset.toggle, t.checked); return; }
+    if(t.dataset.toggle  !== undefined){ onToggle(t.dataset.toggle, t.checked); return; }
+    if(t.dataset.setting !== undefined){ onSettingInput(t.dataset.setting, t.value); return; }  // fps-Select
   });
 }
 
@@ -2373,6 +2572,7 @@ async function enterApp(){
 
   await loadCameras();
   await loadPlan();
+  if(recomputeAllCameras()) await saveCameras();   // Format-Raten an Projekt-Bildrate angleichen
   await loadShoot(defaultShootDay());
   await loadReport(defaultShootDay());
   setView(State.currentView);
