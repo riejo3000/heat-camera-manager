@@ -320,12 +320,15 @@ main#view-container{
 
 /* Format-Picker */
 .rate-preview{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  display:flex; flex-direction:column;
   margin:2px 0 4px; padding:11px 14px;
   background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm);
   font-size:13px; color:var(--text-2);
 }
 .rate-preview b{ font-size:17px; font-weight:700; color:var(--accent); }
+.rp-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.rp-time{ font-size:11.5px; color:var(--text-3); margin-top:7px; line-height:1.35; }
+.rp-time:empty{ display:none; }
 .hde-row{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   margin-bottom:15px; font-size:13px; font-weight:600; color:var(--text);
@@ -396,7 +399,10 @@ main#view-container{
 .pc-hours input:disabled{ background:var(--border-2); color:var(--text-3); }
 .pc-hours input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(232,83,10,.1); }
 .pc-hours .u{ font-size:12px; color:var(--text-3); }
-.pc-gb{ flex:none; width:64px; text-align:right; font-size:13px; font-weight:600; }
+.pc-out{ flex:none; width:84px; text-align:right; display:flex; flex-direction:column; line-height:1.2; }
+.pc-gb{ font-size:13px; font-weight:600; }
+.pc-cards{ font-size:10px; color:var(--text-3); margin-top:1px; }
+.pc-cards.ok{ color:var(--ok); font-weight:600; }
 .plan-cam:not(.on) .pc-gb{ color:var(--text-3); }
 
 /* Toggle Switch */
@@ -1068,6 +1074,42 @@ function recomputeAllCameras(){
   return any;
 }
 
+/* ---------- Aufnahmezeit-Berechnung (Reichweite) ---------- */
+function fmtHrs(h){
+  if(!isFinite(h) || h <= 0) return "—";
+  const tm = Math.round(h * 60);
+  return Math.floor(tm / 60) + ":" + String(tm % 60).padStart(2, "0") + " h";
+}
+function recordTimeStr(rateMBs, cardGB){
+  if(!rateMBs || rateMBs <= 0 || !cardGB) return "—";
+  const usable = cardGB * ((Plan.settings ? Plan.settings.usable : 93) / 100);
+  return fmtHrs(usable * 1000 / rateMBs / 3600);
+}
+function currentSheetRate(){
+  if(_fmt.camType === "Manuell"){
+    const el = document.getElementById("f-bitrate");
+    return el ? parseFloat(el.value) : NaN;
+  }
+  const fps = isPerFrame(_fmt.camType)
+    ? ((_fmt.fps != null) ? _fmt.fps : ((Plan.settings && Plan.settings.fps) || 25))
+    : _fmt.fps;
+  return computeRate(_fmt.camType, _fmt.codec, _fmt.res, fps, _fmt.hde);
+}
+function currentSheetCardGB(){
+  const el = document.getElementById("f-size");
+  const v = el ? parseFloat(el.value) : NaN;
+  return isNaN(v) ? (_fmt.cardSize || 0) : v;
+}
+function updateRecTime(){
+  const el = document.getElementById("rec-time"); if(!el) return;
+  const rate = currentSheetRate();
+  if(!rate || rate <= 0){ el.textContent = ""; return; }
+  let s = "reicht für ≈ " + recordTimeStr(rate, 1000) + " / TB";
+  const cardGB = currentSheetCardGB();
+  if(cardGB > 0) s += "  ·  ≈ " + recordTimeStr(rate, cardGB) + " / Karte (" + cardGB + " GB)";
+  el.textContent = s;
+}
+
 /* ---------- Format-Picker im Bearbeiten-Sheet ---------- */
 function renderFmtArea(){
   if(_fmt.camType === "Manuell"){
@@ -1083,7 +1125,8 @@ function renderFmtArea(){
                  placeholder="0" value="${_fmt.bitrate != null ? esc(_fmt.bitrate) : ""}">
           <span class="suffix">MB/s</span>
         </div>
-      </div>`;
+      </div>
+      <div class="rate-preview"><div class="rp-time mono" id="rec-time"></div></div>`;
   }
   const type = _fmt.camType, perFrame = isPerFrame(type);
   const codecSel = fmtCodecs(type).map(cd => `<option value="${esc(cd)}" ${cd===_fmt.codec?"selected":""}>${esc(cd)}</option>`).join("");
@@ -1125,15 +1168,24 @@ function renderFmtArea(){
     <div class="field"><label>Auflösung</label><select id="f-res-sel">${resSel}</select></div>
     ${fpsField}
     ${hdeField}
-    <div class="rate-preview">Offizielle Datenrate<b id="rate-out" class="mono">${rateStr}</b></div>
+    <div class="rate-preview">
+      <div class="rp-row">Offizielle Datenrate<b id="rate-out" class="mono">${rateStr}</b></div>
+      <div class="rp-time mono" id="rec-time"></div>
+    </div>
   `;
 }
 function refreshFmtArea(){
   const area = document.getElementById("fmt-area");
-  if(area){ area.innerHTML = renderFmtArea(); bindFmtArea(); }
+  if(area){ area.innerHTML = renderFmtArea(); bindFmtArea(); updateRecTime(); }
 }
 function bindFmtArea(){
-  if(_fmt.camType === "Manuell") return;
+  if(_fmt.camType === "Manuell"){
+    const br = document.getElementById("f-bitrate");
+    if(br) br.addEventListener("input", () => { _fmt.bitrate = parseFloat(br.value); updateRecTime(); });
+    const cd = document.getElementById("f-codec");
+    if(cd) cd.addEventListener("input", () => { _fmt.codec = cd.value; });
+    return;
+  }
   const codecSel = document.getElementById("f-codec-sel");
   const resSel   = document.getElementById("f-res-sel");
   const fpsSel   = document.getElementById("f-fps");
@@ -1239,6 +1291,11 @@ function openCameraSheet(id){
     refreshFmtArea();
   });
   bindFmtArea();
+
+  // Reichweite (Aufnahmezeit) live bei Kartengröße-Änderung
+  const sizeInput = $("#f-size");
+  if(sizeInput) sizeInput.addEventListener("input", updateRecTime);
+  updateRecTime();
 
   // Custom-Medium Toggle
   const sel = $("#f-cardtype"), custom = $("#f-cardtype-custom");
@@ -1396,6 +1453,13 @@ function camDayData(cam, entry){
   const changes = Math.max(0, cards - 1);
   return { on, h, mb, gb, cards, changes };
 }
+function camOutHTML(r){
+  if(!r.on) return '<span class="pc-gb mono">–</span>';
+  if(!(r.gb > 0)) return '<span class="pc-gb mono">0 GB</span>';
+  const txt = r.cards <= 1 ? '✓ 1 Karte' : r.cards + ' Karten';
+  return '<span class="pc-gb mono">' + fmtGB(r.gb) + '</span>' +
+         '<span class="pc-cards ' + (r.cards <= 1 ? 'ok' : '') + '">' + txt + '</span>';
+}
 function dayTotalsFor(week, dayKey){
   const day = (week.days || {})[dayKey] || { cams:{} };
   let gb=0, changes=0, cards=0, active=0;
@@ -1480,7 +1544,7 @@ function renderDay(dayKey){
                    value="${r.on && r.h ? esc(r.h) : ''}" ${r.on ? '' : 'disabled'}>
             <span class="u">h</span>
           </div>
-          <span class="pc-gb mono" id="camgb-${esc(cam.id)}">${r.on ? fmtGB(r.gb) : '–'}</span>
+          <span class="pc-out" id="camout-${esc(cam.id)}">${camOutHTML(r)}</span>
         </div>
         ${ r.on ? `<input type="text" class="pc-note" data-camnote="${esc(cam.id)}"
                  placeholder="Einsatz / Rolle — z. B. Wide Shot Entführungsraum" value="${esc(note)}">` : '' }
@@ -1674,10 +1738,10 @@ function updateDayLive(){
   const dayKey = Plan.activeDay;
   const day = Plan.week.days[dayKey] || { cams:{} };
   State.cameras.forEach(cam => {
-    const el = document.getElementById("camgb-" + cam.id);
+    const el = document.getElementById("camout-" + cam.id);
     if(!el) return;
     const r = camDayData(cam, (day.cams || {})[cam.id]);
-    el.textContent = r.on ? fmtGB(r.gb) : "–";
+    el.innerHTML = camOutHTML(r);
   });
   const t = dayTotals(dayKey);
   setText("dash-gb", fmtGB(t.gb));
