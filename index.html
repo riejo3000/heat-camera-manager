@@ -1661,6 +1661,7 @@ function renderWeek(){
         <tbody id="wk-tbody">${weekRowsHTML()}</tbody>
       </table>
     </div>
+    <button class="btn btn-primary btn-block" data-action="export-plan-pdf" style="margin-bottom:14px;">📄 Plan für Schnitt exportieren (PDF · EN)</button>
     ${renderAssumptions()}
     <div id="backup-section">${renderBackupInner()}</div>
     ${renderScenarios()}
@@ -2477,6 +2478,7 @@ function bindGlobalEvents(){
       else if(a === "compare-scn"){ Plan.compare = true; paintPlan(); }
       else if(a === "compare-back"){ Plan.compare = false; paintPlan(); }
       else if(a === "export-pdf") exportPDF();
+      else if(a === "export-plan-pdf") exportPlanPDF();
       else if(a === "push-enable") Push.enable();
       else if(a === "add-drive") onAddDrive();
       return;
@@ -2646,30 +2648,132 @@ function nextPreviewHTML(dayKey){
 }
 
 /* ---------- PDF-Generierung (jsPDF) ---------- */
-function pdfHeader(doc, subtitle){
+function pdfHeader(doc, subtitle, orgLine){
+  orgLine = orgLine || "— Kamera-Management";
   const W = doc.internal.pageSize.getWidth();
   doc.setFillColor(232,83,10); doc.rect(0, 0, W, 6, "F");           // Accent-Band
   doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(232,83,10);
   doc.text("H.E.A.T.", 40, 42);
   const hw = doc.getTextWidth("H.E.A.T.");
   doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(110,110,110);
-  doc.text("— Kamera-Management", 40 + hw + 8, 42);
+  doc.text(orgLine, 40 + hw + 8, 42);
   doc.setFont("helvetica","bold"); doc.setFontSize(13); doc.setTextColor(17,17,17);
   doc.text(subtitle, 40, 66);
   doc.setDrawColor(229,229,229); doc.line(40, 80, W-40, 80);
   return 100;
 }
-function pdfFooters(doc){
+function pdfFooters(doc, en){
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
   const n = doc.internal.getNumberOfPages();
-  const stamp = "erstellt " + new Date().toLocaleString("de-DE");
+  const stamp = (en ? "created " : "erstellt ") + new Date().toLocaleString(en ? "en-GB" : "de-DE");
   for(let i=1;i<=n;i++){
     doc.setPage(i);
     doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(170,170,170);
     doc.text("H.E.A.T. Camera Manager · " + stamp, 40, H-26);
-    doc.text("Seite " + i + " / " + n, W-40, H-26, { align:"right" });
+    doc.text((en ? "Page " : "Seite ") + i + " / " + n, W-40, H-26, { align:"right" });
   }
 }
+/* ---------- Plan-Export für den Schnitt (Englisch) ---------- */
+const DAY_EN = { mo:"Monday", di:"Tuesday", mi:"Wednesday", do:"Thursday", fr:"Friday" };
+function pdfOut(doc, filename){
+  try {
+    const url = URL.createObjectURL(doc.output("blob"));
+    const win = window.open(url, "_blank");
+    if(!win){ const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); }
+    setTimeout(()=> URL.revokeObjectURL(url), 60000);
+    toast("PDF erstellt");
+  } catch(e){ console.warn("PDF-Ausgabe:", e); toast("PDF-Export fehlgeschlagen"); }
+}
+function exportPlanPDF(){
+  if(!(window.jspdf && window.jspdf.jsPDF)){ toast("PDF-Bibliothek nicht geladen"); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"pt", format:"a4" });
+  const M = 40, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const ORG = "— Camera Management";
+  const dateStr = new Date().toLocaleDateString("en-GB", { day:"numeric", month:"long", year:"numeric" });
+  const wk = weekTotals();
+  const activeDays = DAYS.filter(d => dayTotals(d.key).active > 0);
+  const line = (yy) => { doc.setDrawColor(240,240,240); doc.line(M, yy-5, W-M, yy-5); };
+  const brk = (yy, sub) => { if(yy > H-60){ doc.addPage(); return pdfHeader(doc, sub, ORG) + (doc.setFontSize(9),0); } return yy; };
+
+  /* ===== Page 1 — Camera overview ===== */
+  let y = pdfHeader(doc, "Shoot Plan for Post — Camera & Data Overview", ORG);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(120,120,120);
+  doc.text("Generated " + dateStr + "  ·  Project frame rate " + fpsLabel(Plan.settings.fps || 25) + "  ·  " + State.cameras.length + " cameras", M, y);
+  y += 20;
+  doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(17,17,17); doc.text("Cameras — codec, settings & data rate", M, y); y += 15;
+  const cx = [M, M+26, M+150, M+372, M+452];
+  doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(150,150,150);
+  ["ID","CAMERA","CODEC / FORMAT","RATE","MEDIA"].forEach((h,i)=> doc.text(h, cx[i], y));
+  y += 4; doc.setDrawColor(225,225,225); doc.line(M, y, W-M, y); y += 13;
+  doc.setFontSize(9);
+  State.cameras.forEach(cam => {
+    y = brk(y, "Cameras (cont.)");
+    doc.setFont("helvetica","bold"); doc.setTextColor(17,17,17); doc.text(cam.id, cx[0], y);
+    doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(cam.name || "—", 118), cx[1], y);
+    doc.setTextColor(85,85,85); doc.text(doc.splitTextToSize(cam.codec || "—", 216), cx[2], y);
+    doc.setTextColor(17,17,17); doc.text((cam.bitrate || 0) + " MB/s", cx[3], y);
+    doc.setTextColor(85,85,85); doc.text((cam.cardType || "—") + " " + (cam.cardSize || 0) + "GB", cx[4], y);
+    y += 15; line(y);
+  });
+
+  /* ===== Page 2 — Recording plan per day ===== */
+  doc.addPage(); y = pdfHeader(doc, "Recording Plan (planned scenario)", ORG);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(120,120,120);
+  doc.text("Week total: " + fmtTB(wk.gb) + " over " + activeDays.length + " shoot day" + (activeDays.length!==1?"s":"") + ".", M, y); y += 20;
+  if(activeDays.length === 0){ doc.setTextColor(150,150,150); doc.text("No cameras planned yet.", M, y); }
+  activeDays.forEach(d => {
+    const t = dayTotals(d.key);
+    if(y > H-100){ doc.addPage(); y = pdfHeader(doc, "Recording Plan (cont.)", ORG); }
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.setTextColor(17,17,17); doc.text(DAY_EN[d.key], M, y);
+    doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor(232,83,10); doc.text(fmtTB(t.gb) + " total", W-M, y, { align:"right" }); y += 15;
+    doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(150,150,150);
+    doc.text("ID", M, y); doc.text("CAMERA", M+26, y); doc.text("HOURS", M+300, y); doc.text("DATA", M+390, y);
+    y += 4; doc.setDrawColor(225,225,225); doc.line(M, y, W-M, y); y += 12;
+    doc.setFontSize(9);
+    const day = Plan.week.days[d.key] || { cams:{} };
+    State.cameras.forEach(cam => {
+      const r = camDayData(cam, (day.cams || {})[cam.id]);
+      if(!r.on) return;
+      y = brk(y, "Recording Plan (cont.)");
+      doc.setFont("helvetica","bold"); doc.setTextColor(17,17,17); doc.text(cam.id, M, y);
+      doc.setFont("helvetica","normal"); doc.text(doc.splitTextToSize(cam.name || "—", 260), M+26, y);
+      doc.text(r.h + " h", M+300, y);
+      doc.text(fmtGB(r.gb), M+390, y);
+      y += 14;
+    });
+    y += 14;
+  });
+
+  /* ===== Page 3 — Backup & drives ===== */
+  doc.addPage(); y = pdfHeader(doc, "Backup & Drives", ORG);
+  const stations = Plan.settings.backupStations || 3;
+  const expl = "Backup runs on " + stations + " stations in parallel (SilverStack: each card is read once and written to two mirrored drives at once). "
+    + "Because we secure the footage at " + stations + " places simultaneously — required to finish the offload within the available time — and because we use many drives of different sizes (not just two large ones), "
+    + "the footage of each day must be split across several drives. Organising it as one camera per drive is not possible with this setup.";
+  doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(60,60,60);
+  const explLines = doc.splitTextToSize(expl, W - 2*M);
+  doc.text(explLines, M, y); y += explLines.length * 13 + 12;
+  const capA = setCapacityGB("A"), capB = setCapacityGB("B");
+  doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.setTextColor(17,17,17);
+  doc.text("Effective speed " + effectiveBackupSpeed() + " MB/s   ·   Week footage mirrored " + fmtTB(wk.gb*2) + "   ·   Total capacity " + fmtTB(capA+capB), M, y); y += 22;
+  doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text("Drives (" + Plan.drives.length + ", " + fmtTB(capA+capB) + ")", M, y); y += 15;
+  doc.setFont("helvetica","bold"); doc.setFontSize(8); doc.setTextColor(150,150,150);
+  doc.text("DRIVE", M, y); doc.text("SIZE", M+300, y); doc.text("BACKUP SET", M+390, y);
+  y += 4; doc.setDrawColor(225,225,225); doc.line(M, y, W-M, y); y += 13;
+  doc.setFontSize(9);
+  Plan.drives.forEach(dr => {
+    y = brk(y, "Drives (cont.)");
+    doc.setFont("helvetica","normal"); doc.setTextColor(17,17,17); doc.text(dr.name || "—", M, y);
+    doc.text((dr.sizeTB || 0) + " TB", M+300, y);
+    doc.text("Copy " + dr.set, M+390, y);
+    y += 14; line(y);
+  });
+
+  pdfFooters(doc, true);
+  pdfOut(doc, "HEAT_Shoot_Plan.pdf");
+}
+
 function exportPDF(){
   if(!(window.jspdf && window.jspdf.jsPDF)){ toast("PDF-Bibliothek nicht geladen"); return; }
   const { jsPDF } = window.jspdf;
