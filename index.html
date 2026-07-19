@@ -178,7 +178,7 @@ main#view-container{
 .bottom-nav-inner{
   max-width:var(--maxw); margin:0 auto;
   height:var(--nav-h);
-  display:grid; grid-template-columns:repeat(4,1fr);
+  display:grid; grid-template-columns:repeat(5,1fr);
 }
 .nav-item{
   background:none; border:none;
@@ -494,6 +494,23 @@ main#view-container{
 .dp-drv-name{ font-weight:600; }
 .dp-days{ font-size:10.5px; color:var(--text-3); margin-top:3px; }
 
+/* DIT — Drive Assignment */
+.dit-actions{ display:flex; gap:9px; margin-bottom:12px; }
+.dit-actions .btn{ flex:1; }
+.dit-import{ font-size:13px; color:var(--text-2); }
+.dit-import.drag{ border-color:var(--accent); background:rgba(232,83,10,.06); }
+.dit-file{ color:var(--accent); font-weight:600; cursor:pointer; }
+.dit-grid{ display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:6px; }
+.dit-col{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:14px;
+}
+.dit-drive{ margin-bottom:11px; }
+.dit-drive:last-child{ margin-bottom:0; }
+@media (min-width:560px){
+  .dit-grid{ grid-template-columns:1fr 1fr; }
+}
+
 /* ============================================================
    Phase 3 — Drehmodus
    ============================================================ */
@@ -634,6 +651,12 @@ main#view-container{
           <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/>
         </svg>
         <span>Dreh</span>
+      </button>
+      <button class="nav-item" data-view="dit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="7.5" width="18" height="9" rx="2.5"/><path d="M6.5 20h11M3 12h18"/><circle cx="17" cy="14.5" r="1.1" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>DIT</span>
       </button>
       <button class="nav-item active" data-view="kameras">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -951,12 +974,13 @@ async function saveCameras(){
 /* ============================================================
    Views / Router
    ============================================================ */
-const VIEW_TITLES = { plan:"Wochenplan", dreh:"Drehmodus", kameras:"Kameras", bericht:"Bericht" };
+const VIEW_TITLES = { plan:"Wochenplan", dreh:"Drehmodus", dit:"DIT · Platten", kameras:"Kameras", bericht:"Bericht" };
 
 const Views = {
   kameras: renderCameras,
   plan:    renderPlan,
   dreh:    renderDreh,
+  dit:     renderDIT,
   bericht: renderBericht,
 };
 
@@ -986,6 +1010,9 @@ function setView(view){
 
   // Drehmodus: Live-Tick + Realtime nur aktiv, wenn sichtbar
   if(view === "dreh") enterDreh(); else leaveDreh();
+
+  // DIT: Zuweisungen frisch aus dem Store ziehen (andere Stationen!)
+  if(view === "dit") loadAssignments().then(paintDIT);
 
   window.scrollTo(0,0);
 }
@@ -1706,7 +1733,8 @@ function defaultDrives(){
   const d = [];
   for(let i=1;i<=8;i++) d.push({ id:"d2_"+i, name:"LaCie 2 TB #"+i, sizeTB:2, set:(i<=4?"A":"B") });
   for(let i=1;i<=4;i++) d.push({ id:"d5_"+i, name:"LaCie 5 TB #"+i, sizeTB:5, set:(i<=2?"A":"B") });
-  return d;   // Set A = 4×2 + 2×5 = 18 TB · Set B = 4×2 + 2×5 = 18 TB
+  for(let i=1;i<=2;i++) d.push({ id:"d8_"+i, name:"LaCie 8 TB #"+i, sizeTB:8, set:(i===1?"A":"B") });
+  return d;   // Set A = 4×2 + 2×5 + 1×8 = 26 TB · Set B identisch
 }
 function saveDrives(){ return Store.set("drives", "all", Plan.drives); }
 let _drvSaveTimer;
@@ -2416,6 +2444,286 @@ async function syncAlarms(camId){
 }
 
 /* ============================================================
+   DIT — Drive Assignment Tool
+   ------------------------------------------------------------
+   Kernregel: Eine Karte liegt IMMER vollständig auf einer Platte,
+   nie gesplittet. Jede manuelle Zuweisung erzeugt ZWEI Einträge
+   (Copy A + Copy B, gespiegelt), verknüpft über groupId.
+   Füllstand = Summe der Zuweisungen pro Platte (abgeleitet).
+   Persistenz: Store-Collection "assignments" (synct über Geräte).
+   ============================================================ */
+const DIT = { assignments: null };
+let _ditSel = null;   // Zustand des Zuweisungs-Sheets
+
+async function loadAssignments(){
+  const a = await Store.get("assignments", "all");
+  DIT.assignments = Array.isArray(a) ? a : [];
+}
+function saveAssignments(){ return Store.set("assignments", "all", DIT.assignments); }
+
+function driveUsedGB(driveId){
+  return (DIT.assignments || []).filter(a => a.driveId === driveId)
+    .reduce((s, a) => s + (parseFloat(a.sizeGB) || 0), 0);
+}
+function driveFreeGB(d){ return driveUsableGB(d) - driveUsedGB(d.id); }
+function ditFillClass(pct){ return pct >= 92 ? "crit" : pct >= 75 ? "warn" : "ok"; }
+
+/* Empfehlungs-Logik: Größen-Präferenz je Kamera-Kategorie,
+   innerhalb der Stufe die Platte mit dem meisten freien Platz,
+   auf die die Karte noch VOLLSTÄNDIG passt. */
+function camSizeOrder(cam){
+  const t = (cam && cam.camType) || "";
+  if(/VENICE/i.test(t))    return [8, 5, 2];
+  if(/Actioncam/i.test(t)) return [2, 5, 8];
+  return [5, 2, 8];   // FX3, Ronin, Rest
+}
+function recommendDrive(cam, sizeGB, set){
+  const order = camSizeOrder(cam);
+  const cands = setDrives(set);
+  for(const tier of order){
+    const fit = cands.filter(d => Math.round(parseFloat(d.sizeTB)) === tier && driveFreeGB(d) >= sizeGB)
+                     .sort((a, b) => driveFreeGB(b) - driveFreeGB(a));
+    if(fit.length) return fit[0];
+  }
+  const any = cands.filter(d => driveFreeGB(d) >= sizeGB).sort((a, b) => driveFreeGB(b) - driveFreeGB(a));
+  return any[0] || null;   // null = Karte passt auf KEINE Platte des Satzes
+}
+
+/* ---------- Render ---------- */
+function renderDIT(){
+  if(!DIT.assignments) return `<div class="empty-state"><p>Lade …</p></div>`;
+  const col = set => {
+    const rows = setDrives(set).map(d => {
+      const cap = driveUsableGB(d), used = driveUsedGB(d.id);
+      const pct = cap > 0 ? used / cap * 100 : 0;
+      return `<div class="dit-drive">
+        <div class="dp-drv-top"><span class="dp-drv-name">${esc(d.name)}</span><span class="mono">${fmtGB(Math.max(0, cap - used))} frei</span></div>
+        <div class="fill-bar"><div class="fill-bar-inner ${ditFillClass(pct)}" style="width:${Math.min(100, pct)}%"></div></div>
+        <div class="dp-days mono">${fmtGB(used)} / ${fmtGB(cap)} · ${Math.round(pct)}%</div>
+      </div>`;
+    }).join("") || `<p class="assume-hint" style="margin:0;">Keine Platten in diesem Satz.</p>`;
+    return `<div class="dit-col"><div class="dp-set-head"><span>Copy ${set}</span><span class="hde-sub mono">${fmtTB(setCapacityGB(set))}</span></div>${rows}</div>`;
+  };
+  const log = [...DIT.assignments].sort((a, b) => b.ts - a.ts).slice(0, 40).map(a => {
+    const d = Plan.drives.find(x => x.id === a.driveId);
+    return `<div class="ev-row">
+      <span class="ev-time mono">${fmtTime(a.ts)}</span>
+      <span class="ev-cam mono">${esc(a.camId || "IMP")}</span>
+      <span class="ev-text">${esc(a.label || "Karte")} · ${fmtGB(a.sizeGB)} → ${esc(d ? d.name : "?")} <span class="hde-sub">(${esc(a.set)}${a.source === "import" ? " · Import" : ""})</span></span>
+    </div>`;
+  }).join("");
+  return `
+    <div class="dit-actions">
+      <button class="btn btn-primary" data-action="dit-assign">+ Karte zuweisen</button>
+      <button class="btn btn-ghost" data-action="dit-undo" ${DIT.assignments.length ? "" : "disabled"}>↩ Rückgängig</button>
+    </div>
+    <div class="card card-pad dit-import" id="dit-drop">
+      <b>SilverStack-Report importieren</b> — XML/CSV hierher ziehen oder
+      <label class="dit-file">Datei wählen<input type="file" id="dit-file" accept=".xml,.csv,text/xml,text/csv" hidden></label>
+      <div class="assume-hint" style="margin-top:6px;">Zuordnung läuft über den Plattennamen im Zielpfad — benenne die Platten (Plan-Tab) wie die Volumes am Mac.</div>
+    </div>
+    <div class="dit-grid">${col("A")}${col("B")}</div>
+    <div class="section-label">Zuweisungen (${DIT.assignments.length})</div>
+    ${ DIT.assignments.length
+        ? `<div class="card card-pad"><div class="ev-list">${log}</div></div>`
+        : `<p class="assume-hint" style="margin-left:4px;">Noch keine Karten zugewiesen.</p>` }
+  `;
+}
+function paintDIT(){
+  if(State.currentView !== "dit") return;
+  $("#view-container").innerHTML = renderDIT();
+}
+
+/* ---------- Zuweisungs-Sheet ---------- */
+function openDitSheet(){
+  if(!DIT.assignments){ toast("Noch am Laden …"); return; }
+  _sheetMode = "dit";
+  $("#sheet-title").textContent = "Karte zuweisen";
+  $("#sheet-cancel").style.visibility = "";
+  $("#sheet-save").textContent = "Zuweisen";
+  const first = State.cameras[0];
+  _ditSel = { camId: first ? first.id : null, label: "" };
+  ditPrefill();
+  renderDitSheet();
+  openSheet();
+}
+function ditPrefill(){
+  const cam = State.cameras.find(c => c.id === _ditSel.camId);
+  _ditSel.sizeGB = cam ? Math.round((parseFloat(cam.cardSize) || 0) * (Plan.settings.usable / 100)) : 0;
+  ditRecalcRec();
+}
+function ditRecalcRec(){
+  const cam = State.cameras.find(c => c.id === _ditSel.camId);
+  const rA = recommendDrive(cam, _ditSel.sizeGB, "A");
+  const rB = recommendDrive(cam, _ditSel.sizeGB, "B");
+  _ditSel.driveA = rA ? rA.id : null;
+  _ditSel.driveB = rB ? rB.id : null;
+}
+function renderDitSheet(){
+  const camOpts = State.cameras.map(c =>
+    `<option value="${esc(c.id)}" ${c.id === _ditSel.camId ? "selected" : ""}>${esc(c.id)} · ${esc(c.name)}</option>`).join("");
+  const drvSel = (set, selId) => {
+    const rec = set === "A" ? _ditSel.driveA : _ditSel.driveB;
+    const opts = setDrives(set).map(d => {
+      const free = driveFreeGB(d), fits = free >= _ditSel.sizeGB;
+      return `<option value="${esc(d.id)}" ${d.id === (selId || rec) ? "selected" : ""}>${d.id === rec ? "★ " : ""}${esc(d.name)} — ${fmtGB(Math.max(0, free))} frei${fits ? "" : " ⚠ passt nicht"}</option>`;
+    }).join("");
+    return `<select id="dit-drv-${set}">${opts}</select>`;
+  };
+  $("#sheet-body").innerHTML = `
+    <div class="field"><label>Kamera</label><select id="dit-cam">${camOpts}</select></div>
+    <div class="field-row">
+      <div class="field"><label>Karten-Label (optional)</label>
+        <input type="text" id="dit-label" placeholder="z. B. A-003" value="${esc(_ditSel.label || "")}"></div>
+      <div class="field"><label>Größe</label>
+        <div class="suffix-wrap"><input type="number" id="dit-size" class="mono" inputmode="decimal" min="1" step="1" value="${esc(_ditSel.sizeGB)}"><span class="suffix">GB</span></div></div>
+    </div>
+    <div class="field"><label>Copy A · ★ = Empfehlung</label>${drvSel("A", _ditSel.driveA)}</div>
+    <div class="field"><label>Copy B · ★ = Empfehlung</label>${drvSel("B", _ditSel.driveB)}</div>
+    ${ (!_ditSel.driveA || !_ditSel.driveB) ? `<p class="assume-hint" style="color:var(--crit);">⚠ In mindestens einem Satz passt die Karte auf keine Platte vollständig.</p>` : "" }
+  `;
+  $("#dit-cam").addEventListener("change", e => {
+    _ditSel.camId = e.target.value;
+    _ditSel.label = $("#dit-label").value;
+    ditPrefill(); renderDitSheet();
+  });
+  $("#dit-size").addEventListener("input", e => {
+    const v = parseFloat(e.target.value);
+    _ditSel.sizeGB = isNaN(v) ? 0 : v;
+    ditRecalcRec();
+    const a = $("#dit-drv-A"), b = $("#dit-drv-B");
+    if(a && _ditSel.driveA) a.value = _ditSel.driveA;
+    if(b && _ditSel.driveB) b.value = _ditSel.driveB;
+  });
+}
+async function ditApply(){
+  const cam = State.cameras.find(c => c.id === _ditSel.camId);
+  if(!cam){ toast("Kamera wählen"); return; }
+  const size = parseFloat($("#dit-size").value);
+  if(!(size > 0)){ toast("Größe fehlt"); return; }
+  const dA = Plan.drives.find(d => d.id === $("#dit-drv-A").value);
+  const dB = Plan.drives.find(d => d.id === $("#dit-drv-B").value);
+  if(!dA || !dB){ toast("Je Copy A und B eine Platte wählen"); return; }
+  for(const d of [dA, dB]){
+    if(driveFreeGB(d) < size){
+      const free = fmtGB(Math.max(0, driveFreeGB(d)));
+      if(!confirm("⚠ " + d.name + " hat nur " + free + " frei — die Karte (" + fmtGB(size) + ") passt dort NICHT vollständig.\n\nTrotzdem zuweisen?")) return;
+    }
+  }
+  const ts = Date.now(), grp = "g" + ts;
+  const label = ($("#dit-label").value || "").trim() || (cam.id + "-Karte");
+  DIT.assignments.push({ id:"as"+ts+"a", groupId:grp, ts, camId:cam.id, label, sizeGB:size, driveId:dA.id, set:"A", source:"manual" });
+  DIT.assignments.push({ id:"as"+ts+"b", groupId:grp, ts, camId:cam.id, label, sizeGB:size, driveId:dB.id, set:"B", source:"manual" });
+  await saveAssignments();
+  closeSheet(); paintDIT();
+  toast(label + " → " + dA.name + " + " + dB.name);
+}
+async function ditUndo(){
+  if(!DIT.assignments || !DIT.assignments.length) return;
+  const last = DIT.assignments[DIT.assignments.length - 1];
+  const grp = last.groupId;
+  const items = grp ? DIT.assignments.filter(a => a.groupId === grp) : [last];
+  if(!confirm("Letzte Zuweisung rückgängig machen?\n" + (last.label || "Karte") + " — " + items.length + " Eintrag/Einträge werden entfernt.")) return;
+  DIT.assignments = grp ? DIT.assignments.filter(a => a.groupId !== grp) : DIT.assignments.slice(0, -1);
+  await saveAssignments(); paintDIT();
+  toast("Rückgängig gemacht");
+}
+
+/* ---------- SilverStack-Import (XML/CSV, konfigurierbar) ---------- */
+const DIT_IMPORT_FIELDS = {
+  card: ["reel", "volume", "card", "source", "clip", "name"],   // Reihenfolge = Priorität!
+  dest: ["destination", "target", "dest", "path", "folder"],
+  size: ["size", "bytes", "filesize", "length"],
+  xmlRecords: ["clip", "file", "asset", "copy", "item", "resource"]
+};
+function parseSizeGB(v){
+  const s = String(v || "").toLowerCase().replace(",", ".");
+  const num = parseFloat(s);
+  if(isNaN(num)) return 0;
+  if(s.includes("tb")) return num * 1000;
+  if(s.includes("gb")) return num;
+  if(s.includes("mb")) return num / 1000;
+  if(s.includes("kb")) return num / 1e6;
+  return num > 1e7 ? num / 1e9 : num;   // nackte große Zahl = Bytes, sonst GB
+}
+function matchDriveByPath(path){
+  const norm = s => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const p = norm(path);
+  if(!p) return null;
+  return Plan.drives.find(d => { const n = norm(d.name); return n && p.includes(n); }) || null;
+}
+function parseReportCSV(text){
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if(lines.length < 2) return [];
+  const delim = (lines[0].match(/;/g) || []).length > (lines[0].match(/,/g) || []).length ? ";" : ",";
+  const head = lines[0].split(delim).map(h => h.trim().toLowerCase().replace(/^"|"$/g, ""));
+  // Kandidaten in Prioritäts-Reihenfolge prüfen (nicht Spalten-Reihenfolge)
+  const idx = cands => {
+    for(const c of cands){ const i = head.findIndex(h => h.includes(c)); if(i >= 0) return i; }
+    return -1;
+  };
+  const ci = idx(DIT_IMPORT_FIELDS.card), di = idx(DIT_IMPORT_FIELDS.dest), si = idx(DIT_IMPORT_FIELDS.size);
+  if(di < 0 || si < 0) return [];
+  return lines.slice(1).map(l => {
+    const c = l.split(delim).map(x => x.trim().replace(/^"|"$/g, ""));
+    return { card: ci >= 0 ? c[ci] : "", dest: c[di] || "", gb: parseSizeGB(c[si]) };
+  }).filter(e => e.dest && e.gb > 0);
+}
+function parseReportXML(text){
+  const dom = new DOMParser().parseFromString(text, "text/xml");
+  if(dom.querySelector("parsererror")) return [];
+  const xfind = (el, cands) => {
+    for(const ch of el.getElementsByTagName("*")){
+      const n = (ch.localName || "").toLowerCase();
+      if(ch.children.length === 0 && cands.some(c => n.includes(c)) && ch.textContent.trim()) return ch.textContent.trim();
+    }
+    for(const c of cands){ const a = el.getAttribute && el.getAttribute(c); if(a) return a; }
+    return "";
+  };
+  const out = [];
+  for(const el of dom.getElementsByTagName("*")){
+    const n = (el.localName || "").toLowerCase();
+    if(!DIT_IMPORT_FIELDS.xmlRecords.includes(n)) continue;
+    const dest = xfind(el, DIT_IMPORT_FIELDS.dest), size = xfind(el, DIT_IMPORT_FIELDS.size);
+    if(!dest || !size) continue;
+    out.push({ card: xfind(el, DIT_IMPORT_FIELDS.card), dest, gb: parseSizeGB(size) });
+  }
+  return out.filter(e => e.gb > 0);
+}
+function ditImportFile(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    try { ditImportText(String(reader.result), file.name); }
+    catch(e){ console.warn("[DIT] Import:", e); toast("Import fehlgeschlagen"); }
+  };
+  reader.readAsText(file);
+}
+async function ditImportText(text, fname){
+  const entries = /^\s*</.test(text) ? parseReportXML(text) : parseReportCSV(text);
+  if(!entries.length){ toast("Keine Einträge im Report erkannt"); return; }
+  const map = {}; let unmatched = 0;
+  entries.forEach(e => {
+    const d = matchDriveByPath(e.dest);
+    if(!d){ unmatched++; return; }
+    const key = (e.card || "Import") + "|" + d.id;
+    if(!map[key]) map[key] = { card: e.card || "Import", driveId: d.id, set: d.set, gb: 0 };
+    map[key].gb += e.gb;
+  });
+  const list = Object.values(map).filter(x => x.gb > 0);
+  if(!list.length){ toast("Keine Platten-Zuordnung möglich (" + unmatched + " Einträge) — Plattennamen prüfen"); return; }
+  const sum = list.reduce((s, x) => s + x.gb, 0);
+  if(!confirm("Import " + fname + ":\n" + list.length + " Karten-Zuordnung(en) · " + fmtGB(sum) +
+      (unmatched ? "\n" + unmatched + " Einträge ohne Platten-Match (werden übersprungen)" : "") + "\n\nÜbernehmen?")) return;
+  const ts = Date.now(), grp = "imp" + ts;
+  list.forEach((x, i) => DIT.assignments.push({
+    id:"as"+ts+"i"+i, groupId:grp, ts, camId:null, label:x.card,
+    sizeGB: Math.round(x.gb * 10) / 10, driveId:x.driveId, set:x.set, source:"import"
+  }));
+  await saveAssignments(); paintDIT();
+  toast("Import: " + list.length + " Zuordnung(en) übernommen");
+}
+
+/* ============================================================
    Event-Delegation
    ============================================================ */
 function bindGlobalEvents(){
@@ -2427,7 +2735,11 @@ function bindGlobalEvents(){
   // Sheet Controls
   $("#sheet-cancel").addEventListener("click", closeSheet);
   $("#sheet-backdrop").addEventListener("click", closeSheet);
-  $("#sheet-save").addEventListener("click", ()=>{ if(_sheetMode === "camera") saveCameraForm(); else closeSheet(); });
+  $("#sheet-save").addEventListener("click", ()=>{
+    if(_sheetMode === "camera") saveCameraForm();
+    else if(_sheetMode === "dit") ditApply();
+    else closeSheet();
+  });
 
   // Shoot-Sheet: Aktionen
   $("#sheet-body").addEventListener("click", (e)=>{
@@ -2481,6 +2793,8 @@ function bindGlobalEvents(){
       else if(a === "export-plan-pdf") exportPlanPDF();
       else if(a === "push-enable") Push.enable();
       else if(a === "add-drive") onAddDrive();
+      else if(a === "dit-assign") openDitSheet();
+      else if(a === "dit-undo") ditUndo();
       return;
     }
     const dset = e.target.closest("[data-drvset]");
@@ -2509,6 +2823,24 @@ function bindGlobalEvents(){
     const t = e.target;
     if(t.dataset.toggle  !== undefined){ onToggle(t.dataset.toggle, t.checked); return; }
     if(t.dataset.setting !== undefined){ onSettingInput(t.dataset.setting, t.value); return; }  // fps-Select
+    if(t.id === "dit-file"){ const f = t.files && t.files[0]; if(f) ditImportFile(f); t.value = ""; return; }
+  });
+
+  // DIT: Drag & Drop für SilverStack-Reports
+  $("#view-container").addEventListener("dragover", (e)=>{
+    const z = e.target.closest && e.target.closest("#dit-drop");
+    if(z){ e.preventDefault(); z.classList.add("drag"); }
+  });
+  $("#view-container").addEventListener("dragleave", (e)=>{
+    const z = e.target.closest && e.target.closest("#dit-drop");
+    if(z) z.classList.remove("drag");
+  });
+  $("#view-container").addEventListener("drop", (e)=>{
+    const z = e.target.closest && e.target.closest("#dit-drop");
+    if(!z) return;
+    e.preventDefault(); z.classList.remove("drag");
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) ditImportFile(f);
   });
 }
 
@@ -2914,6 +3246,7 @@ async function enterApp(){
   if(recomputeAllCameras()) await saveCameras();   // Format-Raten an Projekt-Bildrate angleichen
   await loadShoot(defaultShootDay());
   await loadReport(defaultShootDay());
+  await loadAssignments();
   setView(State.currentView);
   SyncStatus.render();
   Push.registerSW();      // Service Worker früh registrieren (für Push)
